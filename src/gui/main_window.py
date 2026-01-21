@@ -10,7 +10,7 @@ from PySide6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QSplitter, QStatusBar, QLabel, QLineEdit,
     QListWidget, QListWidgetItem, QTextEdit, QPushButton, QMenuBar,
-    QMenu, QToolBar, QMessageBox, QComboBox, QApplication
+    QMenu, QToolBar, QMessageBox, QComboBox, QApplication, QFrame
 )
 from PySide6.QtCore import Qt, QTimer, Signal
 from PySide6.QtGui import QAction, QKeySequence, QFont
@@ -93,7 +93,6 @@ class MainWindow(QMainWindow):
 
         # 创建搜索栏
         self.setup_search_bar()
-        main_layout.addWidget(self.search_widget)
 
         # 创建分割器（左侧搜索列表，右侧编辑器）
         self.setup_splitter()
@@ -254,7 +253,7 @@ class MainWindow(QMainWindow):
         """设置分割器"""
         self.splitter = QSplitter(Qt.Horizontal)
 
-        # 左侧：搜索结果列表
+        # 左侧：搜索结果列表（一整列）
         self.left_widget = QWidget()
         left_layout = QVBoxLayout()
         self.left_widget.setLayout(left_layout)
@@ -269,23 +268,36 @@ class MainWindow(QMainWindow):
 
         self.splitter.addWidget(self.left_widget)
 
-        # 右侧：编辑器
+        # 右侧：分为上下两部分（上方搜索栏，下方编辑器）
         self.right_widget = QWidget()
         right_layout = QVBoxLayout()
         self.right_widget.setLayout(right_layout)
 
-        # 编辑器标签
-        editor_label = QLabel("编辑器:")
-        right_layout.addWidget(editor_label)
+        # === 上方：搜索栏区域 ===
+        search_area_label = QLabel("搜索设置:")
+        right_layout.addWidget(search_area_label)
+
+        # 将搜索栏widget添加到右侧上方
+        right_layout.addWidget(self.search_widget)
+
+        # 添加分隔线
+        separator = QFrame()
+        separator.setFrameShape(QFrame.HLine)
+        separator.setFrameShadow(QFrame.Sunken)
+        right_layout.addWidget(separator)
+
+        # === 下方：编辑器区域 ===
+        editor_area_label = QLabel("编辑器:")
+        right_layout.addWidget(editor_area_label)
 
         # 文本编辑器
         self.text_editor = QTextEdit()
-        right_layout.addWidget(self.text_editor)
+        right_layout.addWidget(self.text_editor, 3)  # 拉伸因子3，占据更多空间
 
         # 编辑器按钮
         button_layout = QHBoxLayout()
-        self.load_button = QPushButton("加载数据")
-        self.save_button = QPushButton("保存补丁")
+        self.load_button = QPushButton("重新加载数据")
+        self.save_button = QPushButton("快速保存")
         self.clear_editor_button = QPushButton("清空编辑器")
 
         button_layout.addWidget(self.load_button)
@@ -297,7 +309,7 @@ class MainWindow(QMainWindow):
 
         self.splitter.addWidget(self.right_widget)
 
-        # 设置初始分割比例（4:6）
+        # 设置初始分割比例（左侧:右侧 = 4:6）
         self.splitter.setSizes([400, 600])
 
     def setup_statusbar(self):
@@ -495,6 +507,51 @@ class MainWindow(QMainWindow):
         self.count_label.setText("项目: 0")
         self.status_label.setText("已清除搜索")
 
+    def _load_metadata(self, internal_name: str, localized_name: Optional[str] = None):
+        """
+        加载指定内部名称的元数据到编辑器
+
+        Args:
+            internal_name: 物品内部名称
+            localized_name: 本地化名称（如果为None则自动获取）
+        """
+        if localized_name is None:
+            # 获取物品名称（根据当前语言）
+            try:
+                loader = get_wf_items_loader()
+                localized_name = loader.get_item_name(internal_name, self.current_language)
+                # 如果未找到多语言名称，使用英文名称
+                if not localized_name:
+                    localized_name = self.search_engine.get_by_internal_name(internal_name)
+            except Exception as e:
+                self.logger.warning(f"获取物品名称失败: {e}")
+                localized_name = self.search_engine.get_by_internal_name(internal_name)
+
+        # 获取元数据文本
+        self.status_label.setText(f"正在获取元数据: {localized_name}...")
+
+        try:
+            metadata_text = self.api_client.get_effective_metadata(internal_name)
+
+            if metadata_text:
+                # 在文本前添加两行注释（根据用户修改的格式）
+                header = f"# {localized_name}\n{internal_name}\n\n"
+                full_text = header + metadata_text
+
+                # 将文本放入编辑器
+                self.text_editor.setPlainText(full_text)
+                self.status_label.setText(f"元数据已加载: {localized_name}")
+            else:
+                self.text_editor.clear()
+                self.text_editor.setPlainText(f"# 获取元数据失败: {internal_name}\n# 请检查API服务器是否运行在 http://localhost:6155")
+                self.status_label.setText(f"获取元数据失败: {localized_name}")
+
+        except Exception as e:
+            self.logger.error(f"获取元数据失败: {e}")
+            self.text_editor.clear()
+            self.text_editor.setPlainText(f"# 获取元数据时发生错误: {internal_name}\n# 错误: {str(e)}")
+            self.status_label.setText(f"获取元数据失败: {str(e)}")
+
     def _on_item_selected(self):
         """列表项选择事件"""
         selected_items = self.results_list.selectedItems()
@@ -534,51 +591,162 @@ class MainWindow(QMainWindow):
                 self.logger.warning(f"获取物品名称失败: {e}")
                 localized_name = self.search_engine.get_by_internal_name(internal_name)
 
-            # 获取元数据文本
-            self.status_label.setText(f"正在获取元数据: {localized_name}...")
-
-            try:
-                metadata_text = self.api_client.get_effective_metadata(internal_name)
-
-                if metadata_text:
-                    # 在文本前添加两行注释
-                    header = f"# {localized_name}\n{internal_name}\n\n"
-                    full_text = header + metadata_text
-
-                    # 将文本放入编辑器
-                    self.text_editor.setPlainText(full_text)
-                    self.status_label.setText(f"元数据已加载: {localized_name}")
-                else:
-                    self.text_editor.clear()
-                    self.text_editor.setPlainText(f"# 获取元数据失败: {internal_name}\n# 请检查API服务器是否运行在 http://localhost:6155")
-                    self.status_label.setText(f"获取元数据失败: {localized_name}")
-
-            except Exception as e:
-                self.logger.error(f"获取元数据失败: {e}")
-                self.text_editor.clear()
-                self.text_editor.setPlainText(f"# 获取元数据时发生错误: {internal_name}\n# 错误: {str(e)}")
-                self.status_label.setText(f"获取元数据失败: {str(e)}")
+            # 加载元数据
+            self._load_metadata(internal_name, localized_name)
         else:
             # 没有数据（如"未找到匹配的结果"项）
             self.status_label.setText("请选择有效的物品")
 
     def _on_load_clicked(self):
-        """加载按钮点击事件"""
-        QMessageBox.information(self, "功能未实现", "加载功能尚未实现")
+        """重新加载数据按钮点击事件"""
+        # 检查是否有选中的项目
+        selected_items = self.results_list.selectedItems()
+        if not selected_items:
+            QMessageBox.warning(self, "警告", "请先选择一个物品")
+            return
+
+        selected_item = selected_items[0]
+        internal_name = selected_item.data(Qt.UserRole)
+
+        if not internal_name:
+            QMessageBox.warning(self, "警告", "选中的项目无效")
+            return
+
+        # 获取本地化名称用于显示
+        try:
+            loader = get_wf_items_loader()
+            localized_name = loader.get_item_name(internal_name, self.current_language)
+            if not localized_name:
+                localized_name = self.search_engine.get_by_internal_name(internal_name)
+        except Exception as e:
+            self.logger.warning(f"获取物品名称失败: {e}")
+            localized_name = self.search_engine.get_by_internal_name(internal_name)
+
+        # 确认是否重新加载（丢弃当前编辑器内容）
+        reply = QMessageBox.question(
+            self,
+            "确认重新加载",
+            f"确定要重新加载 '{localized_name}' 的元数据吗？\n编辑器当前内容将被丢弃。",
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.No
+        )
+
+        if reply == QMessageBox.Yes:
+            self._load_metadata(internal_name, localized_name)
 
     def _on_save_clicked(self):
-        """保存按钮点击事件"""
+        """快速保存按钮点击事件"""
         content = self.text_editor.toPlainText()
         if not content.strip():
             QMessageBox.warning(self, "警告", "编辑器内容为空")
             return
 
-        QMessageBox.information(self, "功能未实现", "保存功能尚未实现")
+        # 获取保存路径
+        save_path_str = self.settings.get("editor.save_path", "../Metadata Patches")
+        self.logger.debug(f"配置文件中的保存路径: {save_path_str}")
+
+        # 判断是否为绝对路径
+        save_path = Path(save_path_str)
+
+        if save_path.is_absolute():
+            # 绝对路径直接使用
+            save_path = save_path.resolve()
+            self.logger.debug(f"绝对路径解析后: {save_path}")
+        else:
+            # 相对路径：相对于项目根目录（WarframePatchManager目录）
+            base_dir = Path(__file__).parent.parent.parent  # WarframePatchManager目录
+            self.logger.debug(f"项目根目录: {base_dir}")
+            # 使用resolve()解析".."和"."，并规范化路径
+            save_path = (base_dir / save_path_str).resolve()
+            self.logger.debug(f"相对路径解析后: {save_path}")
+
+        # 确保目录存在
+        try:
+            save_path.mkdir(parents=True, exist_ok=True)
+            self.logger.debug(f"保存目录已确认存在: {save_path}")
+        except Exception as e:
+            self.logger.error(f"创建保存目录失败: {e}")
+            QMessageBox.critical(self, "错误", f"创建保存目录失败:\n{str(e)}")
+            return
+
+        # 提取第一行作为文件名
+        first_line = content.split('\n')[0].strip()
+        if first_line.startswith("# "):
+            filename_base = first_line[2:]  # 去掉 "# "
+        else:
+            filename_base = first_line  # 如果没有#，直接使用
+
+        self.logger.debug(f"提取的文件名基础: {filename_base}")
+
+        # 替换非法字符
+        import re
+        # Windows文件名非法字符: \ / : * ? " < > |
+        illegal_chars = r'[\\/*?:"<>|]'
+        safe_filename = re.sub(illegal_chars, '_', filename_base)
+        # 替换空格为下划线（可选）
+        safe_filename = safe_filename.replace(' ', '_')
+        # 限制文件名长度
+        if len(safe_filename) > 100:
+            safe_filename = safe_filename[:100]
+
+        # 添加.txt扩展名
+        if not safe_filename.endswith('.txt'):
+            safe_filename += '.txt'
+
+        self.logger.debug(f"安全文件名: {safe_filename}")
+
+        file_path = save_path / safe_filename
+        self.logger.debug(f"完整文件路径: {file_path}")
+
+        # 检查文件是否存在，给出提示
+        if file_path.exists():
+            reply = QMessageBox.question(
+                self,
+                "文件已存在",
+                f"文件 '{safe_filename}' 已存在，是否覆盖？",
+                QMessageBox.Yes | QMessageBox.No,
+                QMessageBox.No
+            )
+            if reply != QMessageBox.Yes:
+                self.status_label.setText("保存已取消")
+                return
+
+        # 写入文件
+        try:
+            with open(file_path, 'w', encoding='utf-8') as f:
+                f.write(content)
+
+            self.logger.info(f"文件保存成功: {file_path}")
+            self.status_label.setText(f"文件已保存: {safe_filename}")
+            QMessageBox.information(self, "保存成功", f"文件已保存到:\n{file_path}")
+
+        except Exception as e:
+            self.logger.error(f"保存文件失败: {e}")
+            QMessageBox.critical(self, "错误", f"保存文件失败:\n{str(e)}")
 
     def _on_clear_editor_clicked(self):
         """清空编辑器按钮点击事件"""
-        self.text_editor.clear()
-        self.status_label.setText("编辑器已清空")
+        # 检查编辑器是否有内容
+        content = self.text_editor.toPlainText()
+        if not content.strip():
+            self.text_editor.clear()
+            self.status_label.setText("编辑器已清空")
+            return
+
+        # 确认是否清空
+        reply = QMessageBox.question(
+            self,
+            "确认清空",
+            "确定要清空编辑器内容吗？\n所有未保存的更改将会丢失。",
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.No
+        )
+
+        if reply == QMessageBox.Yes:
+            self.text_editor.clear()
+            self.status_label.setText("编辑器已清空")
+        else:
+            self.status_label.setText("清空操作已取消")
 
     def _perform_search(self, query: str):
         """执行搜索"""
