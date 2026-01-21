@@ -20,6 +20,7 @@ from src.config.settings import Settings
 from src.core.search_engine import get_search_engine
 from src.core.api_client import get_api_client
 from src.core.wf_items_loader import get_wf_items_loader
+from src.gui.syntax_highlighter import WarframeSyntaxHighlighter
 
 
 class MainWindow(QMainWindow):
@@ -332,6 +333,9 @@ class MainWindow(QMainWindow):
         # 文本编辑器
         self.text_editor = QTextEdit()
         right_layout.addWidget(self.text_editor, 3)  # 拉伸因子3，占据更多空间
+
+        # 创建语法高亮器
+        self.syntax_highlighter = WarframeSyntaxHighlighter(self.text_editor.document())
 
         # 编辑器文本搜索栏
         self.setup_editor_search_bar()
