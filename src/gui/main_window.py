@@ -10,10 +10,11 @@ from PySide6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QSplitter, QStatusBar, QLabel, QLineEdit,
     QListWidget, QListWidgetItem, QTextEdit, QPushButton, QMenuBar,
-    QMenu, QToolBar, QMessageBox, QComboBox, QApplication, QFrame
+    QMenu, QToolBar, QMessageBox, QComboBox, QApplication, QFrame,
+    QFileDialog
 )
 from PySide6.QtCore import Qt, QTimer, Signal
-from PySide6.QtGui import QAction, QKeySequence, QFont
+from PySide6.QtGui import QAction, QKeySequence, QFont, QTextDocument, QTextCursor, QTextCharFormat
 
 from src.config.settings import Settings
 from src.core.search_engine import get_search_engine
@@ -56,6 +57,11 @@ class MainWindow(QMainWindow):
         self.search_timer = QTimer()
         self.search_timer.setSingleShot(True)
         self.search_timer.timeout.connect(self._on_search_timer_timeout)
+
+        # 初始化编辑器文本搜索延迟定时器
+        self.editor_search_timer = QTimer()
+        self.editor_search_timer.setSingleShot(True)
+        self.editor_search_timer.timeout.connect(self._on_editor_search_timer_timeout)
 
         self.setup_ui()
         self.setup_connections()
@@ -105,40 +111,27 @@ class MainWindow(QMainWindow):
         self.setup_menubar()
 
     def setup_toolbar(self):
-        """设置工具栏"""
-        toolbar = QToolBar("主工具栏")
-        self.addToolBar(toolbar)
-
+        """创建工具栏action（供编辑器和菜单栏使用）"""
         # 文件操作
         self.new_action = QAction("新建", self)
         self.new_action.setShortcut(QKeySequence.New)
-        toolbar.addAction(self.new_action)
 
         self.open_action = QAction("打开", self)
         self.open_action.setShortcut(QKeySequence.Open)
-        toolbar.addAction(self.open_action)
 
         self.save_action = QAction("保存", self)
         self.save_action.setShortcut(QKeySequence.Save)
-        toolbar.addAction(self.save_action)
-
-        toolbar.addSeparator()
 
         # 编辑操作
         self.undo_action = QAction("撤销", self)
         self.undo_action.setShortcut(QKeySequence.Undo)
-        toolbar.addAction(self.undo_action)
 
         self.redo_action = QAction("重做", self)
         self.redo_action.setShortcut(QKeySequence.Redo)
-        toolbar.addAction(self.redo_action)
-
-        toolbar.addSeparator()
 
         # 搜索操作
         self.search_action = QAction("搜索", self)
         self.search_action.setShortcut(QKeySequence.Find)
-        toolbar.addAction(self.search_action)
 
     def setup_search_bar(self):
         """设置搜索栏"""
@@ -168,6 +161,48 @@ class MainWindow(QMainWindow):
         # 清除按钮
         self.clear_button = QPushButton("清除")
         search_layout.addWidget(self.clear_button)
+
+    def setup_editor_menubar(self):
+        """设置编辑器菜单栏（传统菜单栏样式）"""
+        self.editor_menubar = QMenuBar()
+
+        # 文件菜单
+        file_menu = self.editor_menubar.addMenu("文件")
+        file_menu.addAction(self.open_action)
+        file_menu.addAction(self.save_action)
+
+        # 编辑菜单
+        edit_menu = self.editor_menubar.addMenu("编辑")
+        edit_menu.addAction(self.undo_action)
+        edit_menu.addAction(self.redo_action)
+
+        # 搜索菜单已移除，改为右侧搜索栏
+        return self.editor_menubar
+
+    def setup_editor_search_bar(self):
+        """设置编辑器文本搜索栏"""
+        self.editor_search_widget = QWidget()
+        editor_search_layout = QHBoxLayout()
+        self.editor_search_widget.setLayout(editor_search_layout)
+
+        # 搜索标签
+        editor_search_label = QLabel("搜索编辑器内容:")
+        editor_search_layout.addWidget(editor_search_label)
+
+        # 搜索输入框
+        self.editor_search_input = QLineEdit()
+        self.editor_search_input.setPlaceholderText("搜索编辑器文本...")
+        editor_search_layout.addWidget(self.editor_search_input, 1)  # 拉伸因子为1
+
+        # 搜索按钮
+        self.editor_search_button = QPushButton("搜索")
+        editor_search_layout.addWidget(self.editor_search_button)
+
+        # 清除按钮
+        self.editor_clear_button = QPushButton("清除")
+        editor_search_layout.addWidget(self.editor_clear_button)
+
+        return self.editor_search_widget
 
     def setup_language_combo(self):
         """设置语言下拉框"""
@@ -290,9 +325,17 @@ class MainWindow(QMainWindow):
         editor_area_label = QLabel("编辑器:")
         right_layout.addWidget(editor_area_label)
 
+        # 编辑器菜单栏
+        self.setup_editor_menubar()
+        right_layout.addWidget(self.editor_menubar)
+
         # 文本编辑器
         self.text_editor = QTextEdit()
         right_layout.addWidget(self.text_editor, 3)  # 拉伸因子3，占据更多空间
+
+        # 编辑器文本搜索栏
+        self.setup_editor_search_bar()
+        right_layout.addWidget(self.editor_search_widget)
 
         # 编辑器按钮
         button_layout = QHBoxLayout()
@@ -333,38 +376,35 @@ class MainWindow(QMainWindow):
         """设置菜单栏"""
         menubar = self.menuBar()
 
-        # 文件菜单
+        # 文件菜单（仅保留应用程序级别操作）
         file_menu = menubar.addMenu("文件")
-        file_menu.addAction(self.new_action)
-        file_menu.addAction(self.open_action)
-        file_menu.addAction(self.save_action)
-        file_menu.addSeparator()
+        # 新建、打开、保存操作已移动到编辑器菜单栏
+        # file_menu.addAction(self.new_action)
+        # file_menu.addAction(self.open_action)
+        # file_menu.addAction(self.save_action)
+        # file_menu.addSeparator()
 
         exit_action = QAction("退出", self)
         exit_action.setShortcut(QKeySequence.Quit)
         exit_action.triggered.connect(self.close)
         file_menu.addAction(exit_action)
 
-        # 编辑菜单
-        edit_menu = menubar.addMenu("编辑")
-        edit_menu.addAction(self.undo_action)
-        edit_menu.addAction(self.redo_action)
-        edit_menu.addSeparator()
+        # 编辑菜单已移动到编辑器菜单栏
 
         # 视图菜单
         view_menu = menubar.addMenu("视图")
-        toolbar_action = QAction("工具栏", self, checkable=True, checked=True)
-        toolbar_action.toggled.connect(self.toggle_toolbar)
-        view_menu.addAction(toolbar_action)
+        editor_menubar_action = QAction("编辑器菜单栏", self, checkable=True, checked=True)
+        editor_menubar_action.toggled.connect(self.toggle_editor_menubar)
+        view_menu.addAction(editor_menubar_action)
 
         statusbar_action = QAction("状态栏", self, checkable=True, checked=True)
         statusbar_action.toggled.connect(self.toggle_statusbar)
         view_menu.addAction(statusbar_action)
 
         # 工具菜单
-        tools_menu = menubar.addMenu("工具")
-        settings_action = QAction("设置", self)
-        tools_menu.addAction(settings_action)
+        # tools_menu = menubar.addMenu("工具")
+        # settings_action = QAction("设置", self)
+        # tools_menu.addAction(settings_action)
 
         # 帮助菜单
         help_menu = menubar.addMenu("帮助")
@@ -389,7 +429,15 @@ class MainWindow(QMainWindow):
         self.clear_editor_button.clicked.connect(self._on_clear_editor_clicked)
 
         # 工具栏按钮
+        self.open_action.triggered.connect(self._on_open_clicked)
         self.save_action.triggered.connect(self._on_save_clicked)
+        self.undo_action.triggered.connect(self._on_undo_clicked)
+        self.redo_action.triggered.connect(self._on_redo_clicked)
+
+        # 编辑器文本搜索
+        self.editor_search_input.textChanged.connect(self._on_editor_search_text_changed)
+        self.editor_search_button.clicked.connect(self._on_editor_search_clicked)
+        self.editor_clear_button.clicked.connect(self._on_editor_clear_clicked)
 
     def load_settings(self):
         """加载窗口设置"""
@@ -538,16 +586,28 @@ class MainWindow(QMainWindow):
                 header = f"# {localized_name}\n{internal_name}\n\n"
                 full_text = header + metadata_text
 
+                # 清除之前的搜索高亮
+                self._clear_editor_search_highlights()
+                # 重置编辑器当前字符格式
+                self._reset_editor_char_format()
                 # 将文本放入编辑器
                 self.text_editor.setPlainText(full_text)
                 self.status_label.setText(f"元数据已加载: {localized_name}")
             else:
+                # 清除之前的搜索高亮
+                self._clear_editor_search_highlights()
+                # 重置编辑器当前字符格式
+                self._reset_editor_char_format()
                 self.text_editor.clear()
                 self.text_editor.setPlainText(f"# 获取元数据失败: {internal_name}\n# 请检查API服务器是否运行在 http://localhost:6155")
                 self.status_label.setText(f"获取元数据失败: {localized_name}")
 
         except Exception as e:
             self.logger.error(f"获取元数据失败: {e}")
+            # 清除之前的搜索高亮
+            self._clear_editor_search_highlights()
+            # 重置编辑器当前字符格式
+            self._reset_editor_char_format()
             self.text_editor.clear()
             self.text_editor.setPlainText(f"# 获取元数据时发生错误: {internal_name}\n# 错误: {str(e)}")
             self.status_label.setText(f"获取元数据失败: {str(e)}")
@@ -635,48 +695,35 @@ class MainWindow(QMainWindow):
             self._load_metadata(internal_name, localized_name)
 
     def _on_save_clicked(self):
-        """快速保存按钮点击事件"""
+        """保存按钮点击事件（使用文件对话框）"""
         content = self.text_editor.toPlainText()
         if not content.strip():
             QMessageBox.warning(self, "警告", "编辑器内容为空")
             return
 
-        # 获取保存路径
-        save_path_str = self.settings.get("editor.save_path", "../Metadata Patches")
-        self.logger.debug(f"配置文件中的保存路径: {save_path_str}")
+        # 获取默认保存路径
+        default_path_str = self.settings.get("editor.save_path", "../Metadata Patches")
+        default_path = Path(default_path_str)
 
         # 判断是否为绝对路径
-        save_path = Path(save_path_str)
-
-        if save_path.is_absolute():
-            # 绝对路径直接使用
-            save_path = save_path.resolve()
-            self.logger.debug(f"绝对路径解析后: {save_path}")
-        else:
-            # 相对路径：相对于项目根目录（WarframePatchManager目录）
-            base_dir = Path(__file__).parent.parent.parent  # WarframePatchManager目录
-            self.logger.debug(f"项目根目录: {base_dir}")
-            # 使用resolve()解析".."和"."，并规范化路径
-            save_path = (base_dir / save_path_str).resolve()
-            self.logger.debug(f"相对路径解析后: {save_path}")
+        if not default_path.is_absolute():
+            # 相对路径：相对于项目根目录
+            base_dir = Path(__file__).parent.parent.parent
+            default_path = (base_dir / default_path_str).resolve()
 
         # 确保目录存在
         try:
-            save_path.mkdir(parents=True, exist_ok=True)
-            self.logger.debug(f"保存目录已确认存在: {save_path}")
+            default_path.mkdir(parents=True, exist_ok=True)
         except Exception as e:
-            self.logger.error(f"创建保存目录失败: {e}")
-            QMessageBox.critical(self, "错误", f"创建保存目录失败:\n{str(e)}")
-            return
+            self.logger.error(f"创建目录失败: {e}")
+            default_path = Path.home()  # 失败时使用用户主目录
 
-        # 提取第一行作为文件名
+        # 提取第一行作为默认文件名
         first_line = content.split('\n')[0].strip()
         if first_line.startswith("# "):
             filename_base = first_line[2:]  # 去掉 "# "
         else:
             filename_base = first_line  # 如果没有#，直接使用
-
-        self.logger.debug(f"提取的文件名基础: {filename_base}")
 
         # 替换非法字符
         import re
@@ -693,17 +740,25 @@ class MainWindow(QMainWindow):
         if not safe_filename.endswith('.txt'):
             safe_filename += '.txt'
 
-        self.logger.debug(f"安全文件名: {safe_filename}")
+        # 打开保存文件对话框
+        file_path, _ = QFileDialog.getSaveFileName(
+            self,
+            "保存文件",
+            str(default_path / safe_filename),
+            "文本文件 (*.txt);;所有文件 (*.*)"
+        )
 
-        file_path = save_path / safe_filename
-        self.logger.debug(f"完整文件路径: {file_path}")
+        if not file_path:
+            return  # 用户取消
 
-        # 检查文件是否存在，给出提示
+        file_path = Path(file_path)
+
+        # 检查文件是否存在（Qt对话框可能已经处理了，但为了安全再次检查）
         if file_path.exists():
             reply = QMessageBox.question(
                 self,
                 "文件已存在",
-                f"文件 '{safe_filename}' 已存在，是否覆盖？",
+                f"文件 '{file_path.name}' 已存在，是否覆盖？",
                 QMessageBox.Yes | QMessageBox.No,
                 QMessageBox.No
             )
@@ -717,18 +772,87 @@ class MainWindow(QMainWindow):
                 f.write(content)
 
             self.logger.info(f"文件保存成功: {file_path}")
-            self.status_label.setText(f"文件已保存: {safe_filename}")
+            self.status_label.setText(f"文件已保存: {file_path.name}")
             QMessageBox.information(self, "保存成功", f"文件已保存到:\n{file_path}")
 
         except Exception as e:
             self.logger.error(f"保存文件失败: {e}")
             QMessageBox.critical(self, "错误", f"保存文件失败:\n{str(e)}")
 
+    def _on_open_clicked(self):
+        """打开文件按钮点击事件"""
+        # 获取默认打开路径
+        default_path_str = self.settings.get("editor.save_path", "../Metadata Patches")
+        default_path = Path(default_path_str)
+
+        # 判断是否为绝对路径
+        if not default_path.is_absolute():
+            # 相对路径：相对于项目根目录
+            base_dir = Path(__file__).parent.parent.parent
+            default_path = (base_dir / default_path_str).resolve()
+
+        # 确保目录存在
+        try:
+            default_path.mkdir(parents=True, exist_ok=True)
+        except Exception as e:
+            self.logger.error(f"创建目录失败: {e}")
+            default_path = Path.home()  # 失败时使用用户主目录
+
+        # 打开文件对话框
+        file_path, _ = QFileDialog.getOpenFileName(
+            self,
+            "打开文件",
+            str(default_path),
+            "文本文件 (*.txt);;所有文件 (*.*)"
+        )
+
+        if not file_path:
+            return  # 用户取消
+
+        file_path = Path(file_path)
+
+        # 读取文件内容
+        try:
+            with open(file_path, 'r', encoding='utf-8') as f:
+                content = f.read()
+
+            # 清除之前的搜索高亮
+            self._clear_editor_search_highlights()
+            # 重置编辑器当前字符格式
+            self._reset_editor_char_format()
+            # 设置编辑器内容
+            self.text_editor.setPlainText(content)
+            self.logger.info(f"文件打开成功: {file_path}")
+            self.status_label.setText(f"文件已打开: {file_path.name}")
+
+        except Exception as e:
+            self.logger.error(f"打开文件失败: {e}")
+            QMessageBox.critical(self, "错误", f"打开文件失败:\n{str(e)}")
+
+    def _on_undo_clicked(self):
+        """撤销按钮点击事件"""
+        if self.text_editor.document().isUndoAvailable():
+            self.text_editor.undo()
+            self.status_label.setText("已执行撤销操作")
+        else:
+            self.status_label.setText("无可撤销的操作")
+
+    def _on_redo_clicked(self):
+        """重做按钮点击事件"""
+        if self.text_editor.document().isRedoAvailable():
+            self.text_editor.redo()
+            self.status_label.setText("已执行重做操作")
+        else:
+            self.status_label.setText("无可重做的操作")
+
     def _on_clear_editor_clicked(self):
         """清空编辑器按钮点击事件"""
         # 检查编辑器是否有内容
         content = self.text_editor.toPlainText()
         if not content.strip():
+            # 清除搜索高亮和重置格式
+            self._clear_editor_search_highlights()
+            self._reset_editor_char_format()
             self.text_editor.clear()
             self.status_label.setText("编辑器已清空")
             return
@@ -743,6 +867,9 @@ class MainWindow(QMainWindow):
         )
 
         if reply == QMessageBox.Yes:
+            # 清除搜索高亮和重置格式
+            self._clear_editor_search_highlights()
+            self._reset_editor_char_format()
             self.text_editor.clear()
             self.status_label.setText("编辑器已清空")
         else:
@@ -821,8 +948,13 @@ class MainWindow(QMainWindow):
         self.logger.debug(f"显示 {len(results)} 个搜索结果，查询: '{query}'")
 
     def toggle_toolbar(self, visible: bool):
-        """切换工具栏显示"""
-        self.toolBar().setVisible(visible)
+        """切换工具栏显示（已弃用，保留兼容性）"""
+        pass
+
+    def toggle_editor_menubar(self, visible: bool):
+        """切换编辑器菜单栏显示"""
+        if hasattr(self, 'editor_menubar') and self.editor_menubar:
+            self.editor_menubar.setVisible(visible)
 
     def toggle_statusbar(self, visible: bool):
         """切换状态栏显示"""
@@ -843,6 +975,112 @@ class MainWindow(QMainWindow):
         <p>© 2026 OpenWF 项目</p>
         """
         QMessageBox.about(self, "关于 WarframePatchManager", about_text)
+
+    # 编辑器文本搜索相关方法
+    def _on_editor_search_text_changed(self, text: str):
+        """编辑器搜索文本变化事件"""
+        # 重置定时器
+        self.editor_search_timer.stop()
+
+        if len(text) >= 1:
+            # 延迟搜索（避免频繁搜索）
+            delay = 300  # 300毫秒
+            self.editor_search_timer.start(delay)
+        elif len(text) == 0:
+            # 清空搜索框，清除高亮
+            self._clear_editor_search_highlights()
+            self.status_label.setText("编辑器搜索已清除")
+        else:
+            # 字符数不足，显示提示
+            self.status_label.setText("请输入至少 1 个字符进行编辑器搜索")
+
+    def _on_editor_search_timer_timeout(self):
+        """编辑器搜索定时器超时"""
+        search_text = self.editor_search_input.text().strip()
+        if search_text:
+            self._perform_editor_search(search_text)
+
+    def _on_editor_search_clicked(self):
+        """编辑器搜索按钮点击事件"""
+        search_text = self.editor_search_input.text().strip()
+        if search_text:
+            self._perform_editor_search(search_text)
+
+    def _on_editor_clear_clicked(self):
+        """编辑器清除按钮点击事件"""
+        self.editor_search_input.clear()
+        self._clear_editor_search_highlights()
+        self.status_label.setText("编辑器搜索已清除")
+
+    def _perform_editor_search(self, query: str):
+        """执行编辑器文本搜索"""
+        if not query:
+            return
+
+        content = self.text_editor.toPlainText()
+        if not content:
+            self.status_label.setText("编辑器内容为空")
+            return
+
+        # 清除之前的高亮
+        self._clear_editor_search_highlights()
+
+        # 执行搜索（不区分大小写）
+        cursor = self.text_editor.textCursor()
+        cursor.movePosition(QTextCursor.Start)
+
+        found_count = 0
+        format = self.text_editor.currentCharFormat()
+        format.setBackground(Qt.cyan)        # 青色背景，在暗色和亮色模式下都醒目
+        # 不设置前景色，保持原始文字颜色，确保在各种主题下都可读
+
+        while True:
+            # 搜索文本（不区分大小写）
+            cursor = self.text_editor.document().find(query, cursor, QTextDocument.FindFlag())
+            if cursor.isNull():
+                break
+
+            # 高亮匹配的文本
+            cursor.mergeCharFormat(format)
+            found_count += 1
+
+            # 移动到匹配位置之后继续搜索
+            cursor.setPosition(cursor.selectionEnd())
+
+        if found_count > 0:
+            self.status_label.setText(f"在编辑器中找到 {found_count} 个匹配项")
+            # 滚动到第一个匹配项（不选中文本）
+            cursor = self.text_editor.textCursor()
+            cursor.movePosition(QTextCursor.Start)
+            cursor = self.text_editor.document().find(query, cursor, QTextDocument.FindFlag())
+            if not cursor.isNull():
+                # 清除选中状态，只移动光标到匹配位置
+                cursor.clearSelection()
+                self.text_editor.setTextCursor(cursor)
+        else:
+            self.status_label.setText(f"在编辑器中未找到 '{query}'")
+
+    def _clear_editor_search_highlights(self):
+        """清除编辑器搜索高亮"""
+        cursor = self.text_editor.textCursor()
+        # 选择整个文档
+        cursor.movePosition(QTextCursor.Start)
+        cursor.movePosition(QTextCursor.End, QTextCursor.KeepAnchor)
+        format = self.text_editor.currentCharFormat()
+        format.setBackground(Qt.transparent)
+        # 不修改前景色，保持原始文字颜色
+        cursor.mergeCharFormat(format)
+        cursor.clearSelection()
+
+    def _reset_editor_char_format(self):
+        """重置编辑器当前字符格式为默认值"""
+        # 创建一个新的默认字符格式
+        default_format = QTextCharFormat()
+        # 设置编辑器当前字符格式为默认值
+        cursor = self.text_editor.textCursor()
+        cursor.setCharFormat(default_format)
+        # 将默认格式设置为编辑器的当前字符格式
+        self.text_editor.setCurrentCharFormat(default_format)
 
 
 if __name__ == "__main__":
