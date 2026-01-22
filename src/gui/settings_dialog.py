@@ -10,7 +10,8 @@ from typing import Optional
 from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QTabWidget, QWidget,
     QLabel, QLineEdit, QSpinBox, QComboBox, QCheckBox,
-    QPushButton, QFormLayout, QMessageBox, QGroupBox, QGridLayout
+    QPushButton, QFormLayout, QMessageBox, QGroupBox, QGridLayout,
+    QMainWindow
 )
 from PySide6.QtCore import Qt, Signal
 
@@ -306,11 +307,25 @@ class SettingsDialog(QDialog):
             self.settings.set("window.width", self.window_width_spin.value())
             self.settings.set("window.height", self.window_height_spin.value())
 
+            # 保存当前窗口位置和状态
+            try:
+                if self.parent() and hasattr(self.parent(), 'isMaximized') and hasattr(self.parent(), 'x') and hasattr(self.parent(), 'y'):
+                    main_window = self.parent()
+                    # 保存最大化状态
+                    self.settings.set("window.maximized", main_window.isMaximized())
+                    # 如果窗口不是最大化状态，保存当前位置
+                    if not main_window.isMaximized():
+                        self.settings.set("window.pos_x", main_window.x())
+                        self.settings.set("window.pos_y", main_window.y())
+            except Exception as e:
+                self.logger.warning(f"保存窗口位置失败: {e}")
+                # 继续执行，不影响其他设置的保存
+
             # 保存到文件
             if self.settings.save():
                 self.logger.info("设置保存成功")
                 self.settings_saved.emit()
-                QMessageBox.information(self, "成功", "设置已保存")
+                # QMessageBox.information(self, "成功", "设置已保存")
                 self.accept()
             else:
                 self.logger.error("设置保存失败")
