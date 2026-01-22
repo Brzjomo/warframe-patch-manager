@@ -41,8 +41,7 @@ class Settings:
             },
             "search": {
                 "min_chars": 2,
-                "max_results": 1500,
-                "languages": ["zh", "en"]
+                "max_results": 1500
             },
             "editor": {
                 "font_size": 12,

@@ -759,17 +759,17 @@ class MainWindow(QMainWindow):
         file_path = Path(file_path)
 
         # 检查文件是否存在（Qt对话框可能已经处理了，但为了安全再次检查）
-        if file_path.exists():
-            reply = QMessageBox.question(
-                self,
-                "文件已存在",
-                f"文件 '{file_path.name}' 已存在，是否覆盖？",
-                QMessageBox.Yes | QMessageBox.No,
-                QMessageBox.No
-            )
-            if reply != QMessageBox.Yes:
-                self.status_label.setText("保存已取消")
-                return
+        # if file_path.exists():
+        #     reply = QMessageBox.question(
+        #         self,
+        #         "文件已存在",
+        #         f"文件 '{file_path.name}' 已存在，是否覆盖？",
+        #         QMessageBox.Yes | QMessageBox.No,
+        #         QMessageBox.No
+        #     )
+        #     if reply != QMessageBox.Yes:
+        #         self.status_label.setText("保存已取消")
+        #         return
 
         # 写入文件
         try:

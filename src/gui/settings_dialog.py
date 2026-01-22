@@ -146,10 +146,6 @@ class SettingsDialog(QDialog):
         self.search_max_results_spin.setSingleStep(100)
         search_form.addRow("最大搜索结果:", self.search_max_results_spin)
 
-        # 支持的语言
-        self.search_languages_edit = QLineEdit()
-        self.search_languages_edit.setPlaceholderText("zh,en,de,fr,...")
-        search_form.addRow("支持的语言:", self.search_languages_edit)
 
         layout.addStretch()
 
@@ -173,13 +169,13 @@ class SettingsDialog(QDialog):
         editor_form.addRow("字体大小:", self.editor_font_size_spin)
 
         # 主题
-        self.editor_theme_combo = QComboBox()
-        self.editor_theme_combo.addItems(["dark", "light"])
-        editor_form.addRow("主题:", self.editor_theme_combo)
+        # self.editor_theme_combo = QComboBox()
+        # self.editor_theme_combo.addItems(["dark", "light"])
+        # editor_form.addRow("主题:", self.editor_theme_combo)
 
         # 自动保存
-        self.editor_auto_save_check = QCheckBox()
-        editor_form.addRow("自动保存:", self.editor_auto_save_check)
+        # self.editor_auto_save_check = QCheckBox()
+        # editor_form.addRow("自动保存:", self.editor_auto_save_check)
 
         # 保存路径
         self.editor_save_path_edit = QLineEdit()
@@ -241,20 +237,17 @@ class SettingsDialog(QDialog):
                 self.settings.get("search.max_results", 1500)
             )
 
-            # 语言列表转为逗号分隔的字符串
-            languages = self.settings.get("search.languages", ["zh", "en"])
-            self.search_languages_edit.setText(",".join(languages))
 
             # 编辑器设置
             self.editor_font_size_spin.setValue(
                 self.settings.get("editor.font_size", 12)
             )
-            self.editor_theme_combo.setCurrentText(
-                self.settings.get("editor.theme", "dark")
-            )
-            self.editor_auto_save_check.setChecked(
-                self.settings.get("editor.auto_save", False)
-            )
+            # self.editor_theme_combo.setCurrentText(
+            #     self.settings.get("editor.theme", "dark")
+            # )
+            # self.editor_auto_save_check.setChecked(
+            #     self.settings.get("editor.auto_save", False)
+            # )
             self.editor_save_path_edit.setText(
                 self.settings.get("editor.save_path", "../Metadata Patches")
             )
@@ -290,17 +283,11 @@ class SettingsDialog(QDialog):
             self.settings.set("search.min_chars", self.search_min_chars_spin.value())
             self.settings.set("search.max_results", self.search_max_results_spin.value())
 
-            # 语言列表处理
-            languages_text = self.search_languages_edit.text().strip()
-            if languages_text:
-                languages = [lang.strip() for lang in languages_text.split(",") if lang.strip()]
-                if languages:  # 确保不为空列表
-                    self.settings.set("search.languages", languages)
 
             # 编辑器设置
             self.settings.set("editor.font_size", self.editor_font_size_spin.value())
-            self.settings.set("editor.theme", self.editor_theme_combo.currentText())
-            self.settings.set("editor.auto_save", self.editor_auto_save_check.isChecked())
+            # self.settings.set("editor.theme", self.editor_theme_combo.currentText())
+            # self.settings.set("editor.auto_save", self.editor_auto_save_check.isChecked())
             self.settings.set("editor.save_path", self.editor_save_path_edit.text().strip())
 
             # 窗口设置
