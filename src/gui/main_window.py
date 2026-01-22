@@ -430,7 +430,7 @@ class MainWindow(QMainWindow):
 
         # 编辑器按钮
         self.load_button.clicked.connect(self._on_load_clicked)
-        self.save_button.clicked.connect(self._on_save_clicked)
+        self.save_button.clicked.connect(self._on_quick_save_clicked)
         self.clear_editor_button.clicked.connect(self._on_clear_editor_clicked)
 
         # 工具栏按钮
@@ -783,6 +783,86 @@ class MainWindow(QMainWindow):
         except Exception as e:
             self.logger.error(f"保存文件失败: {e}")
             QMessageBox.critical(self, "错误", f"保存文件失败:\n{str(e)}")
+
+    def _on_quick_save_clicked(self):
+        """快速保存按钮点击事件（使用设置中的保存路径，不显示文件对话框）"""
+        content = self.text_editor.toPlainText()
+        if not content.strip():
+            QMessageBox.warning(self, "警告", "编辑器内容为空")
+            return
+
+        # 获取默认保存路径
+        default_path_str = self.settings.get("editor.save_path", "../Metadata Patches")
+        default_path = Path(default_path_str)
+
+        # 判断是否为绝对路径
+        if not default_path.is_absolute():
+            # 相对路径：相对于项目根目录
+            base_dir = Path(__file__).parent.parent.parent
+            default_path = (base_dir / default_path_str).resolve()
+
+        # 确保目录存在
+        try:
+            default_path.mkdir(parents=True, exist_ok=True)
+        except Exception as e:
+            self.logger.error(f"创建目录失败: {e}")
+            QMessageBox.critical(self, "错误", f"无法创建保存目录:\n{str(e)}")
+            return
+
+        # 提取第一行作为文件名
+        first_line = content.split('\n')[0].strip()
+        if first_line.startswith("# "):
+            filename_base = first_line[2:]  # 去掉 "# "
+        else:
+            filename_base = first_line  # 如果没有#，直接使用
+
+        # 如果文件名基础为空，使用默认名称
+        if not filename_base:
+            filename_base = "untitled"
+
+        # 替换非法字符
+        import re
+        # Windows文件名非法字符: \ / : * ? " < > |
+        illegal_chars = r'[\\/*?:"<>|]'
+        safe_filename = re.sub(illegal_chars, '_', filename_base)
+        # 替换空格为下划线（可选）
+        safe_filename = safe_filename.replace(' ', '_')
+        # 限制文件名长度
+        if len(safe_filename) > 100:
+            safe_filename = safe_filename[:100]
+
+        # 添加.txt扩展名
+        if not safe_filename.endswith('.txt'):
+            safe_filename += '.txt'
+
+        # 构建完整文件路径
+        file_path = default_path / safe_filename
+
+        # 检查文件是否存在，如果存在则询问是否覆盖
+        if file_path.exists():
+            reply = QMessageBox.question(
+                self,
+                "文件已存在",
+                f"文件 '{file_path.name}' 已存在，是否覆盖？",
+                QMessageBox.Yes | QMessageBox.No,
+                QMessageBox.No
+            )
+            if reply != QMessageBox.Yes:
+                self.status_label.setText("快速保存已取消")
+                return
+
+        # 写入文件
+        try:
+            with open(file_path, 'w', encoding='utf-8') as f:
+                f.write(content)
+
+            self.logger.info(f"文件快速保存成功: {file_path}")
+            self.status_label.setText(f"文件已快速保存: {file_path.name}")
+            # 快速保存不显示成功对话框，只在状态栏显示
+
+        except Exception as e:
+            self.logger.error(f"快速保存文件失败: {e}")
+            QMessageBox.critical(self, "错误", f"快速保存文件失败:\n{str(e)}")
 
     def _on_open_clicked(self):
         """打开文件按钮点击事件"""
