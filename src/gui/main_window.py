@@ -1332,55 +1332,65 @@ class MainWindow(QMainWindow):
 
     def refresh_local_patches_list(self):
         """刷新本地补丁列表"""
-        # 获取补丁目录路径
-        save_path_str = self.settings.get("editor.save_path", "../Metadata Patches")
-        save_path = Path(save_path_str)
+        # 暂时阻塞选择变化信号，防止刷新时自动选择项目
+        self.local_patches_list.blockSignals(True)
 
-        # 判断是否为绝对路径
-        if not save_path.is_absolute():
-            # 相对路径：相对于项目根目录
-            base_dir = Path(__file__).parent.parent.parent
-            save_path = (base_dir / save_path_str).resolve()
+        try:
+            # 获取补丁目录路径
+            save_path_str = self.settings.get("editor.save_path", "../Metadata Patches")
+            save_path = Path(save_path_str)
 
-        # 清空列表
-        self.local_patches_list.clear()
+            # 判断是否为绝对路径
+            if not save_path.is_absolute():
+                # 相对路径：相对于项目根目录
+                base_dir = Path(__file__).parent.parent.parent
+                save_path = (base_dir / save_path_str).resolve()
 
-        # 检查目录是否存在
-        if not save_path.exists():
-            self.logger.warning(f"补丁目录不存在: {save_path}")
-            self.local_patches_list.addItem(f"目录不存在: {save_path}")
-            return
+            # 清空列表
+            self.local_patches_list.clear()
 
-        # 扫描txt和txt.bk文件
-        txt_files = list(save_path.glob("*.txt"))
-        bk_files = list(save_path.glob("*.txt.bk"))
+            # 检查目录是否存在
+            if not save_path.exists():
+                self.logger.warning(f"补丁目录不存在: {save_path}")
+                self.local_patches_list.addItem(f"目录不存在: {save_path}")
+                return
 
-        all_files = []
-        for file in txt_files:
-            all_files.append((file, True))  # True表示激活状态
-        for file in bk_files:
-            all_files.append((file, False))  # False表示未激活状态
+            # 扫描txt和txt.bk文件
+            txt_files = list(save_path.glob("*.txt"))
+            bk_files = list(save_path.glob("*.txt.bk"))
 
-        # 按文件名排序
-        all_files.sort(key=lambda x: x[0].name.lower())
+            all_files = []
+            for file in txt_files:
+                all_files.append((file, True))  # True表示激活状态
+            for file in bk_files:
+                all_files.append((file, False))  # False表示未激活状态
 
-        # 添加到列表
-        for file, is_active in all_files:
-            if is_active:
-                display_name = file.name
-                icon_text = "[激活] "
-            else:
-                display_name = file.name
-                icon_text = "[未激活] "
+            # 按文件名排序
+            all_files.sort(key=lambda x: x[0].name.lower())
 
-            item_text = f"{icon_text}{display_name}"
-            item = QListWidgetItem(item_text)
-            item.setData(Qt.UserRole, file)  # 存储完整路径
-            item.setData(Qt.UserRole + 1, is_active)  # 存储激活状态
-            self.local_patches_list.addItem(item)
+            # 添加到列表
+            for file, is_active in all_files:
+                if is_active:
+                    display_name = file.name
+                    icon_text = "[激活] "
+                else:
+                    display_name = file.name
+                    icon_text = "[未激活] "
 
-        self.logger.info(f"本地补丁列表已刷新，找到 {len(all_files)} 个文件")
-        self.status_label.setText(f"本地补丁列表已刷新 ({len(all_files)} 个文件)")
+                item_text = f"{icon_text}{display_name}"
+                item = QListWidgetItem(item_text)
+                item.setData(Qt.UserRole, file)  # 存储完整路径
+                item.setData(Qt.UserRole + 1, is_active)  # 存储激活状态
+                self.local_patches_list.addItem(item)
+
+            self.logger.info(f"本地补丁列表已刷新，找到 {len(all_files)} 个文件")
+            self.status_label.setText(f"本地补丁列表已刷新 ({len(all_files)} 个文件)")
+
+        finally:
+            # 确保没有选择任何项目（在阻塞信号的情况下）
+            self.local_patches_list.setCurrentItem(None)
+            # 恢复信号连接
+            self.local_patches_list.blockSignals(False)
 
     def _on_local_patch_selected(self):
         """本地补丁列表项选择事件"""
@@ -1453,18 +1463,6 @@ class MainWindow(QMainWindow):
             QMessageBox.warning(self, "警告", "只有未激活的补丁文件(.txt.bk)才能被激活")
             return
 
-        # 确认操作
-        reply = QMessageBox.question(
-            self,
-            "确认启用",
-            f"确定要启用补丁 '{file_path.name}' 吗？",
-            QMessageBox.Yes | QMessageBox.No,
-            QMessageBox.No
-        )
-
-        if reply != QMessageBox.Yes:
-            return
-
         # 重命名文件：去掉.bk扩展名
         new_path = file_path.with_suffix('')  # 移除.bk
 
@@ -1519,18 +1517,6 @@ class MainWindow(QMainWindow):
         # 检查是否为txt文件
         if not file_path.name.endswith('.txt'):
             QMessageBox.warning(self, "警告", "只有激活的补丁文件(.txt)才能被禁用")
-            return
-
-        # 确认操作
-        reply = QMessageBox.question(
-            self,
-            "确认禁用",
-            f"确定要禁用补丁 '{file_path.name}' 吗？",
-            QMessageBox.Yes | QMessageBox.No,
-            QMessageBox.No
-        )
-
-        if reply != QMessageBox.Yes:
             return
 
         # 重命名文件：添加.bk扩展名
