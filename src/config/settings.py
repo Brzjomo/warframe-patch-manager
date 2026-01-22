@@ -34,7 +34,6 @@ class Settings:
         """加载默认设置"""
         return {
             "api": {
-                "base_url": "http://localhost:8080",
                 "metadata_base_url": "http://localhost:6155",
                 "timeout": 30,
                 "retry_count": 3
@@ -182,7 +181,6 @@ if __name__ == "__main__":
     print(json.dumps(settings.settings, indent=2, ensure_ascii=False))
 
     # 测试获取设置
-    print(f"\nAPI 基础URL: {settings.get('api.base_url')}")
     print(f"搜索最小字符数: {settings.get('search.min_chars')}")
 
     # 测试设置

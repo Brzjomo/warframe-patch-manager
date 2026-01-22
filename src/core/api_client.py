@@ -16,18 +16,16 @@ logger = logging.getLogger(__name__)
 class APIClient:
     """API 客户端"""
 
-    def __init__(self, base_url: Optional[str] = None, metadata_base_url: Optional[str] = None,
+    def __init__(self, metadata_base_url: Optional[str] = None,
                  timeout: int = 30, max_retries: int = 3):
         """
         初始化 API 客户端
 
         Args:
-            base_url: API 基础 URL，如果为 None 则从配置加载
             metadata_base_url: 元数据服务器 URL，如果为 None 则从配置加载
             timeout: 请求超时时间（秒）
             max_retries: 最大重试次数
         """
-        self.base_url = base_url or "http://localhost:8080"
         self.metadata_base_url = metadata_base_url or "http://localhost:6155"
         self.timeout = timeout
         self.max_retries = max_retries
@@ -46,174 +44,18 @@ class APIClient:
         self.cache: Dict[str, Dict[str, Any]] = {}
         self.cache_ttl: Dict[str, float] = {}  # 缓存过期时间
 
-        logger.info(f"API 客户端初始化完成，基础URL: {self.base_url}, 元数据URL: {self.metadata_base_url}")
+        logger.info(f"API 客户端初始化完成，元数据URL: {self.metadata_base_url}")
 
-    def set_base_url(self, base_url: str):
-        """设置基础 URL"""
-        self.base_url = base_url.rstrip('/')
-        logger.info(f"API 基础URL已更新: {self.base_url}")
 
     def set_metadata_base_url(self, metadata_base_url: str):
         """设置元数据服务器 URL"""
         self.metadata_base_url = metadata_base_url.rstrip('/')
         logger.info(f"元数据服务器URL已更新: {self.metadata_base_url}")
 
-    def test_connection(self) -> bool:
-        """
-        测试 API 连接
 
-        Returns:
-            连接是否成功
-        """
-        endpoint = f"{self.base_url}/health"
 
-        try:
-            response = self.session.get(endpoint, timeout=5)
-            return response.status_code == 200
-        except requests.exceptions.RequestException as e:
-            logger.error(f"API 连接测试失败: {e}")
-            return False
 
-    def get_item_data(self, internal_name: str, use_cache: bool = True) -> Optional[Dict[str, Any]]:
-        """
-        获取物品数据
 
-        Args:
-            internal_name: 物品内部名称
-            use_cache: 是否使用缓存
-
-        Returns:
-            物品数据字典，如果失败返回 None
-        """
-        # 检查缓存
-        cache_key = f"item:{internal_name}"
-        if use_cache and self._is_cache_valid(cache_key):
-            logger.debug(f"从缓存获取物品数据: {internal_name}")
-            return self.cache[cache_key]
-
-        # TODO: 根据实际 API 文档实现具体请求
-        # 这里需要根据 Reference Manual.html 和 Script API Reference.pluto 实现
-
-        # 模拟 API 响应（用于开发测试）
-        if self.base_url == "http://localhost:8080":
-            logger.debug(f"模拟获取物品数据: {internal_name}")
-            mock_data = self._get_mock_item_data(internal_name)
-
-            # 缓存结果
-            if mock_data and use_cache:
-                self._set_cache(cache_key, mock_data, ttl=300)  # 5分钟缓存
-
-            return mock_data
-
-        # 实际 API 请求
-        endpoint = f"{self.base_url}/api/item"
-        params = {"name": internal_name}
-
-        try:
-            response = self._request_with_retry("GET", endpoint, params=params)
-
-            if response.status_code == 200:
-                data = response.json()
-
-                # 缓存结果
-                if use_cache:
-                    self._set_cache(cache_key, data, ttl=300)  # 5分钟缓存
-
-                logger.info(f"成功获取物品数据: {internal_name}")
-                return data
-            else:
-                logger.error(f"获取物品数据失败，状态码: {response.status_code}")
-                return None
-
-        except requests.exceptions.RequestException as e:
-            logger.error(f"获取物品数据请求失败: {e}")
-            return None
-
-    def get_multiple_items(self, internal_names: List[str]) -> Dict[str, Optional[Dict[str, Any]]]:
-        """
-        批量获取多个物品数据
-
-        Args:
-            internal_names: 内部名称列表
-
-        Returns:
-            物品数据字典，键为内部名称，值为数据或 None
-        """
-        results = {}
-
-        for name in internal_names:
-            results[name] = self.get_item_data(name)
-
-        return results
-
-    def search_items(self, query: str, category: Optional[str] = None, limit: int = 50) -> List[Dict[str, Any]]:
-        """
-        搜索物品
-
-        Args:
-            query: 搜索查询
-            category: 物品类别（可选）
-            limit: 结果数量限制
-
-        Returns:
-            物品数据列表
-        """
-        # TODO: 实现 API 搜索
-        # 这里需要根据实际 API 实现
-
-        endpoint = f"{self.base_url}/api/search"
-        params = {"q": query, "limit": limit}
-        if category:
-            params["category"] = category
-
-        try:
-            response = self._request_with_retry("GET", endpoint, params=params)
-
-            if response.status_code == 200:
-                data = response.json()
-                logger.info(f"搜索 '{query}' 找到 {len(data)} 个结果")
-                return data
-            else:
-                logger.error(f"搜索失败，状态码: {response.status_code}")
-                return []
-
-        except requests.exceptions.RequestException as e:
-            logger.error(f"搜索请求失败: {e}")
-            return []
-
-    def _request_with_retry(self, method: str, url: str, **kwargs) -> requests.Response:
-        """
-        带重试的请求
-
-        Args:
-            method: HTTP 方法
-            url: 请求 URL
-            **kwargs: 请求参数
-
-        Returns:
-            响应对象
-        """
-        last_exception = None
-
-        for attempt in range(self.max_retries):
-            try:
-                response = self.session.request(method, url, timeout=self.timeout, **kwargs)
-                response.raise_for_status()
-                return response
-
-            except requests.exceptions.RequestException as e:
-                last_exception = e
-
-                if attempt < self.max_retries - 1:
-                    wait_time = 2 ** attempt  # 指数退避
-                    logger.warning(f"请求失败，{wait_time}秒后重试 ({attempt + 1}/{self.max_retries}): {e}")
-                    time.sleep(wait_time)
-                else:
-                    logger.error(f"请求失败，已达到最大重试次数: {e}")
-                    raise
-
-        # 理论上不会执行到这里
-        raise last_exception
 
     def _set_cache(self, key: str, value: Dict[str, Any], ttl: int = 300):
         """
@@ -402,13 +244,11 @@ def get_api_client() -> APIClient:
         from src.config.settings import get_settings
         settings = get_settings()
 
-        base_url = settings.get("api.base_url", "http://localhost:8080")
         metadata_base_url = settings.get("api.metadata_base_url", "http://localhost:6155")
         timeout = settings.get("api.timeout", 30)
         retry_count = settings.get("api.retry_count", 3)
 
         _api_client_instance = APIClient(
-            base_url=base_url,
             metadata_base_url=metadata_base_url,
             timeout=timeout,
             max_retries=retry_count

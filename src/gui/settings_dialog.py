@@ -77,10 +77,6 @@ class SettingsDialog(QDialog):
         self.cancel_button.clicked.connect(self.reject)
         button_layout.addWidget(self.cancel_button)
 
-        # 测试连接按钮
-        self.test_button = QPushButton("测试API连接")
-        self.test_button.clicked.connect(self.test_api_connection)
-        button_layout.addWidget(self.test_button)
 
         button_layout.addStretch()
 
@@ -98,10 +94,6 @@ class SettingsDialog(QDialog):
         api_group.setLayout(api_form)
         layout.addWidget(api_group)
 
-        # API基础URL
-        self.api_base_url_edit = QLineEdit()
-        self.api_base_url_edit.setPlaceholderText("http://localhost:8080")
-        api_form.addRow("API基础URL:", self.api_base_url_edit)
 
         # 元数据基础URL（新增字段）
         self.metadata_base_url_edit = QLineEdit()
@@ -215,9 +207,6 @@ class SettingsDialog(QDialog):
         """从配置加载设置到UI"""
         try:
             # API设置
-            self.api_base_url_edit.setText(
-                self.settings.get("api.base_url", "http://localhost:8080")
-            )
             # 加载metadata_base_url，如果不存在则使用默认值
             self.metadata_base_url_edit.setText(
                 self.settings.get("api.metadata_base_url", "http://localhost:6155")
@@ -268,7 +257,6 @@ class SettingsDialog(QDialog):
         """保存UI设置到配置"""
         try:
             # API设置
-            self.settings.set("api.base_url", self.api_base_url_edit.text().strip())
             # 保存metadata_base_url到配置
             metadata_url = self.metadata_base_url_edit.text().strip()
             if metadata_url:
@@ -322,35 +310,6 @@ class SettingsDialog(QDialog):
             self.logger.error(f"保存设置失败: {e}")
             QMessageBox.critical(self, "错误", f"保存设置失败:\n{str(e)}")
 
-    def test_api_connection(self):
-        """测试API连接"""
-        from src.core.api_client import get_api_client
-
-        try:
-            base_url = self.api_base_url_edit.text().strip()
-            if not base_url:
-                QMessageBox.warning(self, "警告", "请输入API基础URL")
-                return
-
-            # 创建临时API客户端进行测试
-            client = get_api_client()
-            original_url = client.base_url
-
-            # 临时设置URL
-            client.set_base_url(base_url)
-
-            # 测试连接
-            if client.test_connection():
-                QMessageBox.information(self, "成功", f"API连接测试成功\nURL: {base_url}")
-            else:
-                QMessageBox.warning(self, "警告", f"API连接测试失败\nURL: {base_url}")
-
-            # 恢复原始URL
-            client.set_base_url(original_url)
-
-        except Exception as e:
-            self.logger.error(f"API连接测试失败: {e}")
-            QMessageBox.critical(self, "错误", f"API连接测试失败:\n{str(e)}")
 
     def get_metadata_base_url(self) -> str:
         """获取元数据服务器URL"""
