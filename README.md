@@ -62,8 +62,8 @@
 
 1. **克隆项目**
    ```bash
-   git clone <repository-url>
-   cd WarframePatchManager
+   git clone https://github.com/Brzjomo/warframe-patch-manager.git
+   cd warframe-patch-manager
    ```
 
 2. **创建虚拟环境**
