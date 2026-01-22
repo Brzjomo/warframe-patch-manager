@@ -309,13 +309,16 @@ class WFItemsLoader:
         获取物品数量
 
         Returns:
-            物品总数
+            CSV文件和i18n文件中去重后的物品总数
         """
         if not self.loaded:
             if not self.load_data():
                 return 0
 
-        return len(self.english_names)
+        # 获取所有不重复的内部名称（合并CSV和i18n数据）
+        all_items = set(self.english_names.keys())
+        all_items.update(self.i18n_data.keys())
+        return len(all_items)
 
 
 # 全局数据加载器实例

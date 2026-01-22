@@ -223,9 +223,23 @@ class SearchEngine:
         获取物品数量
 
         Returns:
-            物品总数
+            CSV文件和i18n文件中去重后的物品总数
         """
-        return len(self.items)
+        # 获取CSV物品数
+        csv_count = len(self.items)
+
+        # 尝试获取wf_items_loader的合并计数（包括i18n）
+        try:
+            loader = self._get_wf_items_loader()
+            if loader is not None:
+                # 使用loader的get_item_count()，它返回CSV和i18n的去重总数
+                return loader.get_item_count()
+            else:
+                # 如果loader不可用，只返回CSV计数
+                return csv_count
+        except Exception as e:
+            logger.warning(f"获取wf_items_loader计数失败，使用CSV计数: {e}")
+            return csv_count
 
     def rebuild_index(self):
         """重建搜索索引"""
