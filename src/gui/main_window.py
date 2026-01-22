@@ -51,6 +51,9 @@ class MainWindow(QMainWindow):
         # 当前语言
         self.current_language = "zh"
 
+        # 当前编辑器内容的文件路径（None表示从API生成的内容）
+        self.current_file_path = None
+
         # 初始化标志 - 用于防止初始化期间保存语言设置
         self.initializing_language_combo = True
 
@@ -345,10 +348,12 @@ class MainWindow(QMainWindow):
         button_layout = QHBoxLayout()
         self.load_button = QPushButton("重新加载数据")
         self.save_button = QPushButton("快速保存")
+        self.delete_patch_button = QPushButton("删除补丁")
         self.clear_editor_button = QPushButton("清空编辑器")
 
         button_layout.addWidget(self.load_button)
         button_layout.addWidget(self.save_button)
+        button_layout.addWidget(self.delete_patch_button)
         button_layout.addWidget(self.clear_editor_button)
         button_layout.addStretch()
 
@@ -431,6 +436,7 @@ class MainWindow(QMainWindow):
         # 编辑器按钮
         self.load_button.clicked.connect(self._on_load_clicked)
         self.save_button.clicked.connect(self._on_quick_save_clicked)
+        self.delete_patch_button.clicked.connect(self._on_delete_patch_clicked)
         self.clear_editor_button.clicked.connect(self._on_clear_editor_clicked)
 
         # 工具栏按钮
@@ -585,6 +591,8 @@ class MainWindow(QMainWindow):
 
         try:
             metadata_text = self.api_client.get_effective_metadata(internal_name)
+            # 内容来自API，清除文件路径标记
+            self.current_file_path = None
 
             if metadata_text:
                 # 在文本前添加两行注释（根据用户修改的格式）
@@ -778,6 +786,8 @@ class MainWindow(QMainWindow):
 
             self.logger.info(f"文件保存成功: {file_path}")
             self.status_label.setText(f"文件已保存: {file_path.name}")
+            # 更新当前文件路径
+            self.current_file_path = file_path
             QMessageBox.information(self, "保存成功", f"文件已保存到:\n{file_path}")
 
         except Exception as e:
@@ -858,6 +868,8 @@ class MainWindow(QMainWindow):
 
             self.logger.info(f"文件快速保存成功: {file_path}")
             self.status_label.setText(f"文件已快速保存: {file_path.name}")
+            # 更新当前文件路径
+            self.current_file_path = file_path
             # 快速保存不显示成功对话框，只在状态栏显示
 
         except Exception as e:
@@ -907,12 +919,68 @@ class MainWindow(QMainWindow):
             self._reset_editor_char_format()
             # 设置编辑器内容
             self.text_editor.setPlainText(content)
+            # 记录当前文件路径
+            self.current_file_path = file_path
             self.logger.info(f"文件打开成功: {file_path}")
             self.status_label.setText(f"文件已打开: {file_path.name}")
 
         except Exception as e:
             self.logger.error(f"打开文件失败: {e}")
             QMessageBox.critical(self, "错误", f"打开文件失败:\n{str(e)}")
+
+    def _on_delete_patch_clicked(self):
+        """删除补丁按钮点击事件"""
+        # 检查当前内容是否来自本地文件
+        if self.current_file_path is None:
+            QMessageBox.information(
+                self,
+                "无法删除",
+                "当前内容非本地文件，无法删除。\n\n内容可能是从API生成或尚未保存到本地。"
+            )
+            return
+
+        # 检查文件是否存在
+        if not self.current_file_path.exists():
+            QMessageBox.warning(
+                self,
+                "文件不存在",
+                f"文件 '{self.current_file_path.name}' 不存在，可能已被删除或移动。"
+            )
+            # 清除无效的文件路径记录
+            self.current_file_path = None
+            return
+
+        # 确认删除
+        reply = QMessageBox.question(
+            self,
+            "确认删除",
+            f"确定要删除文件 '{self.current_file_path.name}' 吗？\n\n此操作不可撤销。",
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.No
+        )
+
+        if reply != QMessageBox.Yes:
+            return
+
+        # 执行删除
+        try:
+            file_path = self.current_file_path  # 保存引用
+            file_path.unlink()  # 删除文件
+            self.logger.info(f"文件已删除: {file_path}")
+            self.status_label.setText(f"文件已删除: {file_path}")
+
+            # 清除文件路径记录（文件已不存在）
+            self.current_file_path = None
+
+            # 可选：不清除编辑器内容，用户可以继续编辑并另存为新文件
+
+        except Exception as e:
+            self.logger.error(f"删除文件失败: {e}")
+            QMessageBox.critical(
+                self,
+                "删除失败",
+                f"删除文件失败:\n{str(e)}"
+            )
 
     def _on_undo_clicked(self):
         """撤销按钮点击事件"""
@@ -939,6 +1007,8 @@ class MainWindow(QMainWindow):
             self._clear_editor_search_highlights()
             self._reset_editor_char_format()
             self.text_editor.clear()
+            # 清除文件路径记录
+            self.current_file_path = None
             self.status_label.setText("编辑器已清空")
             return
 
@@ -956,6 +1026,8 @@ class MainWindow(QMainWindow):
             self._clear_editor_search_highlights()
             self._reset_editor_char_format()
             self.text_editor.clear()
+            # 清除文件路径记录
+            self.current_file_path = None
             self.status_label.setText("编辑器已清空")
         else:
             self.status_label.setText("清空操作已取消")
