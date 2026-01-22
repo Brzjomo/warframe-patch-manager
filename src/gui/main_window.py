@@ -381,17 +381,17 @@ class MainWindow(QMainWindow):
         menubar = self.menuBar()
 
         # 文件菜单（仅保留应用程序级别操作）
-        file_menu = menubar.addMenu("文件")
+        # file_menu = menubar.addMenu("文件")
         # 新建、打开、保存操作已移动到编辑器菜单栏
         # file_menu.addAction(self.new_action)
         # file_menu.addAction(self.open_action)
         # file_menu.addAction(self.save_action)
         # file_menu.addSeparator()
 
-        exit_action = QAction("退出", self)
-        exit_action.setShortcut(QKeySequence.Quit)
-        exit_action.triggered.connect(self.close)
-        file_menu.addAction(exit_action)
+        # exit_action = QAction("退出", self)
+        # exit_action.setShortcut(QKeySequence.Quit)
+        # exit_action.triggered.connect(self.close)
+        # file_menu.addAction(exit_action)
 
         # 编辑菜单已移动到编辑器菜单栏
 
@@ -406,9 +406,10 @@ class MainWindow(QMainWindow):
         view_menu.addAction(statusbar_action)
 
         # 工具菜单
-        # tools_menu = menubar.addMenu("工具")
-        # settings_action = QAction("设置", self)
-        # tools_menu.addAction(settings_action)
+        tools_menu = menubar.addMenu("工具")
+        settings_action = QAction("设置", self)
+        settings_action.triggered.connect(self.show_settings)
+        tools_menu.addAction(settings_action)
 
         # 帮助菜单
         help_menu = menubar.addMenu("帮助")
@@ -968,17 +969,53 @@ class MainWindow(QMainWindow):
         """显示关于对话框"""
         about_text = """
         <h3>WarframePatchManager</h3>
-        <p>版本: 0.1.0 (开发中)</p>
-        <p>一个用于管理和编辑 Warframe 游戏物品数据的辅助工具。</p>
+        <p>版本: 0.1.0</p>
+        <p>一个用于快速生成openWF游戏补丁的辅助工具。</p>
         <p>功能:</p>
         <ul>
           <li>多语言搜索游戏物品</li>
-          <li>通过 API 获取物品数据</li>
-          <li>编辑和保存补丁文件</li>
+          <li>通过 API 获取metadata</li>
+          <li>生成初始补丁文件</li>
+          <li>视觉优化的编辑器窗口</li>
+          <li>快速保存到补丁目录</li>
         </ul>
-        <p>© 2026 OpenWF 项目</p>
+        <p>©2026 Brzjomo</p>
         """
         QMessageBox.about(self, "关于 WarframePatchManager", about_text)
+
+    def show_settings(self):
+        """显示设置对话框"""
+        from src.gui.settings_dialog import SettingsDialog
+        dialog = SettingsDialog(self.settings, self)
+        dialog.settings_saved.connect(self.on_settings_saved)
+        dialog.exec()
+
+    def on_settings_saved(self):
+        """设置保存后的处理"""
+        # 重新加载设置以应用更改
+        self.load_settings()
+
+        # 更新API客户端的metadata_base_url
+        self.update_api_client_metadata_url()
+
+        self.logger.info("设置已更新并应用")
+
+    def update_api_client_metadata_url(self):
+        """更新API客户端的metadata_base_url"""
+        from src.core.api_client import get_api_client
+
+        try:
+            metadata_url = self.settings.get("api.metadata_base_url", "http://localhost:6155")
+            self.logger.info(f"元数据服务器URL已更新: {metadata_url}")
+
+            # 更新API客户端的metadata_base_url
+            client = get_api_client()
+            client.set_metadata_base_url(metadata_url)
+
+            self.logger.info("API客户端元数据URL已更新")
+
+        except Exception as e:
+            self.logger.error(f"更新API客户端metadata URL失败: {e}")
 
     # 编辑器文本搜索相关方法
     def _on_editor_search_text_changed(self, text: str):

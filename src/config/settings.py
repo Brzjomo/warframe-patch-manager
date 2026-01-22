@@ -35,6 +35,7 @@ class Settings:
         return {
             "api": {
                 "base_url": "http://localhost:8080",
+                "metadata_base_url": "http://localhost:6155",
                 "timeout": 30,
                 "retry_count": 3
             },

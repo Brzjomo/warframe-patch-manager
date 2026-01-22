@@ -16,16 +16,19 @@ logger = logging.getLogger(__name__)
 class APIClient:
     """API 客户端"""
 
-    def __init__(self, base_url: Optional[str] = None, timeout: int = 30, max_retries: int = 3):
+    def __init__(self, base_url: Optional[str] = None, metadata_base_url: Optional[str] = None,
+                 timeout: int = 30, max_retries: int = 3):
         """
         初始化 API 客户端
 
         Args:
             base_url: API 基础 URL，如果为 None 则从配置加载
+            metadata_base_url: 元数据服务器 URL，如果为 None 则从配置加载
             timeout: 请求超时时间（秒）
             max_retries: 最大重试次数
         """
         self.base_url = base_url or "http://localhost:8080"
+        self.metadata_base_url = metadata_base_url or "http://localhost:6155"
         self.timeout = timeout
         self.max_retries = max_retries
 
@@ -43,12 +46,17 @@ class APIClient:
         self.cache: Dict[str, Dict[str, Any]] = {}
         self.cache_ttl: Dict[str, float] = {}  # 缓存过期时间
 
-        logger.info(f"API 客户端初始化完成，基础URL: {self.base_url}")
+        logger.info(f"API 客户端初始化完成，基础URL: {self.base_url}, 元数据URL: {self.metadata_base_url}")
 
     def set_base_url(self, base_url: str):
         """设置基础 URL"""
         self.base_url = base_url.rstrip('/')
         logger.info(f"API 基础URL已更新: {self.base_url}")
+
+    def set_metadata_base_url(self, metadata_base_url: str):
+        """设置元数据服务器 URL"""
+        self.metadata_base_url = metadata_base_url.rstrip('/')
+        logger.info(f"元数据服务器URL已更新: {self.metadata_base_url}")
 
     def test_connection(self) -> bool:
         """
@@ -362,8 +370,7 @@ class APIClient:
             元数据文本，如果失败返回 None
         """
         # 使用特定的元数据 API 端点
-        metadata_base_url = "http://localhost:6155"
-        endpoint = f"{metadata_base_url}/get_effective_metadata?{internal_name}"
+        endpoint = f"{self.metadata_base_url}/get_effective_metadata?{internal_name}"
 
         try:
             logger.info(f"请求元数据: {endpoint}")
@@ -391,7 +398,21 @@ def get_api_client() -> APIClient:
     """获取全局 API 客户端实例"""
     global _api_client_instance
     if _api_client_instance is None:
-        _api_client_instance = APIClient()
+        # 从配置加载设置
+        from src.config.settings import get_settings
+        settings = get_settings()
+
+        base_url = settings.get("api.base_url", "http://localhost:8080")
+        metadata_base_url = settings.get("api.metadata_base_url", "http://localhost:6155")
+        timeout = settings.get("api.timeout", 30)
+        retry_count = settings.get("api.retry_count", 3)
+
+        _api_client_instance = APIClient(
+            base_url=base_url,
+            metadata_base_url=metadata_base_url,
+            timeout=timeout,
+            max_retries=retry_count
+        )
     return _api_client_instance
 
 
