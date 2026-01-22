@@ -1174,8 +1174,8 @@ class MainWindow(QMainWindow):
         """显示关于对话框"""
         about_text = """
         <h3>WarframePatchManager</h3>
-        <p>版本: 0.1.0</p>
-        <p>一个用于快速生成openWF游戏补丁的辅助工具。</p>
+        <p>版本: 1.0.0</p>
+        <p>一个用于快速生成和管理OpenWF游戏补丁的辅助工具。</p>
         <p>功能:</p>
         <ul>
           <li>多语言搜索游戏物品</li>
@@ -1183,8 +1183,9 @@ class MainWindow(QMainWindow):
           <li>生成初始补丁文件</li>
           <li>视觉优化的编辑器窗口</li>
           <li>快速保存到补丁目录</li>
+          <li>快速启用/禁用/删除补丁</li>
         </ul>
-        <p>©2026 Brzjomo</p>
+        <p>©2026 Brzjomo - Powered By DeepSeek</p>
         """
         QMessageBox.about(self, "关于 WarframePatchManager", about_text)
 
