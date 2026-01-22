@@ -6,6 +6,8 @@ Warframe Items 数据加载器
 import csv
 import json
 import logging
+import sys
+import os
 from pathlib import Path
 from typing import Dict, List, Tuple, Optional, Set
 
@@ -24,14 +26,12 @@ class WFItemsLoader:
             i18n_file: i18n.json 文件路径，包含多语言翻译
         """
         if csv_file is None:
-            # 默认使用项目内的数据文件
-            base_dir = Path(__file__).parent.parent.parent
-            csv_file = base_dir / "data" / "InternalName.csv"
+            # 查找CSV数据文件
+            csv_file = self._find_file("data/InternalName.csv")
 
         if i18n_file is None:
-            # 默认使用 node_modules 中的 i18n.json
-            base_dir = Path(__file__).parent.parent.parent
-            i18n_file = base_dir / "node_modules" / "@wfcd" / "items" / "data" / "json" / "i18n.json"
+            # 查找i18n.json文件
+            i18n_file = self._find_file("node_modules/@wfcd/items/data/json/i18n.json")
 
         self.csv_file = Path(csv_file)
         self.i18n_file = Path(i18n_file)
@@ -44,6 +44,53 @@ class WFItemsLoader:
         logger.info(f"WFItemsLoader 初始化完成")
         logger.info(f"CSV 文件: {self.csv_file}")
         logger.info(f"i18n 文件: {self.i18n_file}")
+
+    def _find_file(self, relative_path: str) -> str:
+        """查找文件路径，处理PyInstaller打包环境"""
+        # 检查是否在PyInstaller打包环境中运行
+        if getattr(sys, 'frozen', False):
+            # PyInstaller打包环境，数据文件在临时目录
+            # sys._MEIPASS 是临时解压目录（仅PyInstaller）
+            if hasattr(sys, '_MEIPASS'):
+                base_dir = Path(sys._MEIPASS)
+            else:
+                # 某些PyInstaller版本可能没有_MEIPASS
+                base_dir = Path(sys.executable).parent
+        else:
+            # 开发环境：使用项目根目录
+            base_dir = Path(__file__).parent.parent.parent
+
+        file_path = base_dir / relative_path
+
+        # 如果文件不存在，尝试其他位置
+        if not file_path.exists():
+            # 尝试当前工作目录
+            alt_path = Path.cwd() / relative_path
+            if alt_path.exists():
+                return str(alt_path)
+
+            # 尝试exe所在目录（针对打包环境）
+            if getattr(sys, 'frozen', False):
+                exe_dir = Path(sys.executable).parent
+                exe_path = exe_dir / relative_path
+                if exe_path.exists():
+                    return str(exe_path)
+
+            # 对于i18n.json，尝试在打包的数据目录中查找
+            if "i18n.json" in relative_path:
+                # 在PyInstaller中，i18n.json可能在node_modules子目录中
+                # 或者直接在data目录中
+                if hasattr(sys, '_MEIPASS'):
+                    # 尝试不同的可能位置
+                    possible_paths = [
+                        base_dir / "i18n.json",
+                        base_dir / "data" / "i18n.json",
+                    ]
+                    for possible_path in possible_paths:
+                        if possible_path.exists():
+                            return str(possible_path)
+
+        return str(file_path)
 
     def load_data(self) -> bool:
         """

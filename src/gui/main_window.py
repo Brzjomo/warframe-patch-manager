@@ -773,8 +773,9 @@ class MainWindow(QMainWindow):
 
         # 判断是否为绝对路径
         if not default_path.is_absolute():
-            # 相对路径：相对于项目根目录
-            base_dir = Path(__file__).parent.parent.parent
+            # 相对路径：相对于应用程序基础目录
+            from src.utils.path_utils import get_base_dir
+            base_dir = get_base_dir()
             default_path = (base_dir / default_path_str).resolve()
 
         # 确保目录存在
@@ -860,8 +861,9 @@ class MainWindow(QMainWindow):
 
         # 判断是否为绝对路径
         if not default_path.is_absolute():
-            # 相对路径：相对于项目根目录
-            base_dir = Path(__file__).parent.parent.parent
+            # 相对路径：相对于应用程序基础目录
+            from src.utils.path_utils import get_base_dir
+            base_dir = get_base_dir()
             default_path = (base_dir / default_path_str).resolve()
 
         # 确保目录存在
@@ -937,8 +939,9 @@ class MainWindow(QMainWindow):
 
         # 判断是否为绝对路径
         if not default_path.is_absolute():
-            # 相对路径：相对于项目根目录
-            base_dir = Path(__file__).parent.parent.parent
+            # 相对路径：相对于应用程序基础目录
+            from src.utils.path_utils import get_base_dir
+            base_dir = get_base_dir()
             default_path = (base_dir / default_path_str).resolve()
 
         # 确保目录存在
@@ -1343,8 +1346,9 @@ class MainWindow(QMainWindow):
 
             # 判断是否为绝对路径
             if not save_path.is_absolute():
-                # 相对路径：相对于项目根目录
-                base_dir = Path(__file__).parent.parent.parent
+                # 相对路径：相对于应用程序基础目录
+                from src.utils.path_utils import get_base_dir
+                base_dir = get_base_dir()
                 save_path = (base_dir / save_path_str).resolve()
 
             # 清空列表

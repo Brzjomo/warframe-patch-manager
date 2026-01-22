@@ -5,6 +5,8 @@
 
 import csv
 import logging
+import sys
+import os
 from pathlib import Path
 from typing import List, Tuple, Dict, Any, Optional, Set
 
@@ -24,9 +26,8 @@ class SearchEngine:
             data_file: CSV 数据文件路径，如果为 None 则使用默认路径
         """
         if data_file is None:
-            # 默认使用项目内的数据文件
-            base_dir = Path(__file__).parent.parent.parent
-            data_file = base_dir / "data" / "InternalName.csv"
+            # 查找数据文件
+            data_file = self._find_data_file("data/InternalName.csv")
 
         self.data_file = Path(data_file)
         self.items: List[Tuple[str, str]] = []
@@ -38,6 +39,39 @@ class SearchEngine:
         self.wf_items_loader = None
 
         logger.info(f"搜索引擎初始化完成，加载了 {len(self.items)} 个物品")
+
+    def _find_data_file(self, relative_path: str) -> str:
+        """查找数据文件路径，处理PyInstaller打包环境"""
+        # 检查是否在PyInstaller打包环境中运行
+        if getattr(sys, 'frozen', False):
+            # PyInstaller打包环境，数据文件在临时目录
+            # sys._MEIPASS 是临时解压目录（仅PyInstaller）
+            if hasattr(sys, '_MEIPASS'):
+                base_dir = Path(sys._MEIPASS)
+            else:
+                # 某些PyInstaller版本可能没有_MEIPASS
+                base_dir = Path(sys.executable).parent
+        else:
+            # 开发环境：使用项目根目录
+            base_dir = Path(__file__).parent.parent.parent
+
+        file_path = base_dir / relative_path
+
+        # 如果文件不存在，尝试其他位置
+        if not file_path.exists():
+            # 尝试当前工作目录
+            alt_path = Path.cwd() / relative_path
+            if alt_path.exists():
+                return str(alt_path)
+
+            # 尝试exe所在目录（针对打包环境）
+            if getattr(sys, 'frozen', False):
+                exe_dir = Path(sys.executable).parent
+                exe_path = exe_dir / relative_path
+                if exe_path.exists():
+                    return str(exe_path)
+
+        return str(file_path)
 
     def load_items(self) -> bool:
         """

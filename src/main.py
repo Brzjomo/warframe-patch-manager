@@ -9,7 +9,14 @@ import logging
 from pathlib import Path
 
 # 添加项目根目录到 Python 路径
-project_root = Path(__file__).parent.parent
+# 处理PyInstaller打包环境
+if getattr(sys, 'frozen', False):
+    # 打包环境：使用exe所在目录作为项目根目录
+    project_root = Path(sys.executable).parent
+else:
+    # 开发环境：使用src目录的父目录
+    project_root = Path(__file__).parent.parent
+
 if str(project_root) not in sys.path:
     sys.path.insert(0, str(project_root))
 

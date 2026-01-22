@@ -4,6 +4,7 @@
 
 import json
 import os
+import sys
 from pathlib import Path
 from typing import Dict, Any, Optional
 
@@ -19,8 +20,7 @@ class Settings:
             config_file: 配置文件路径，如果为 None 则使用默认路径
         """
         if config_file is None:
-            base_dir = Path(__file__).parent.parent.parent
-            config_file = base_dir / "config.json"
+            config_file = self._get_default_config_path()
 
         self.config_file = Path(config_file)
         self.settings = self._load_default_settings()
@@ -29,6 +29,24 @@ class Settings:
             self.load()
         else:
             self.save()  # 创建默认配置文件
+
+    def _get_default_config_path(self) -> str:
+        """获取默认配置文件路径
+
+        处理PyInstaller打包环境，确保配置文件保存在exe所在目录
+        而不是临时解压目录
+        """
+        # 检查是否在PyInstaller打包环境中运行
+        if getattr(sys, 'frozen', False):
+            # PyInstaller打包环境
+            # sys.executable 是exe文件的路径
+            exe_dir = Path(sys.executable).parent
+            # 配置文件保存在exe同目录
+            return str(exe_dir / "config.json")
+        else:
+            # 开发环境：使用项目根目录
+            base_dir = Path(__file__).parent.parent.parent
+            return str(base_dir / "config.json")
 
     def _load_default_settings(self) -> Dict[str, Any]:
         """加载默认设置"""
