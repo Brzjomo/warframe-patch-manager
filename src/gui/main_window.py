@@ -79,6 +79,9 @@ class MainWindow(QMainWindow):
         # 确保初始化标志为False（防止异常情况）
         self.initializing_language_combo = False
 
+        # 加载本地补丁列表
+        self.refresh_local_patches_list()
+
         self.logger.info("主窗口初始化完成")
         self.logger.info(f"已加载 {item_count} 个物品")
 
@@ -86,7 +89,7 @@ class MainWindow(QMainWindow):
         """设置用户界面"""
         self.setWindowTitle("WarframePatchManager")
         self.resize(
-            self.settings.get("window.width", 1200),
+            self.settings.get("window.width", 1500),
             self.settings.get("window.height", 800)
         )
 
@@ -292,22 +295,68 @@ class MainWindow(QMainWindow):
         """设置分割器"""
         self.splitter = QSplitter(Qt.Horizontal)
 
-        # 左侧：搜索结果列表（一整列）
-        self.left_widget = QWidget()
-        left_layout = QVBoxLayout()
-        self.left_widget.setLayout(left_layout)
+        # ===== 左侧：分为两部分（左侧本地补丁管理，右侧搜索结果列表）=====
+        self.left_container = QWidget()
+        left_container_layout = QHBoxLayout()
+        left_container_layout.setContentsMargins(0, 0, 0, 0)
+        self.left_container.setLayout(left_container_layout)
+
+        # 左侧分割器（本地补丁管理区域和搜索结果列表）
+        self.left_splitter = QSplitter(Qt.Horizontal)
+        left_container_layout.addWidget(self.left_splitter)
+
+        # === 左侧：本地补丁管理区域 ===
+        self.local_patches_widget = QWidget()
+        local_patches_layout = QVBoxLayout()
+        self.local_patches_widget.setLayout(local_patches_layout)
+
+        # 本地补丁管理标签
+        patches_label = QLabel("本地补丁管理:")
+        local_patches_layout.addWidget(patches_label)
+
+        # 补丁文件列表
+        self.local_patches_list = QListWidget()
+        local_patches_layout.addWidget(self.local_patches_list)
+
+        # 补丁管理按钮区域
+        patch_buttons_layout = QHBoxLayout()
+
+        self.refresh_patches_button = QPushButton("刷新列表")
+        self.enable_patch_button = QPushButton("启用补丁")
+        self.disable_patch_button = QPushButton("禁用补丁")
+        self.delete_patch_button = QPushButton("删除补丁")  # 从编辑器区域移过来的按钮
+
+        patch_buttons_layout.addWidget(self.refresh_patches_button)
+        patch_buttons_layout.addWidget(self.enable_patch_button)
+        patch_buttons_layout.addWidget(self.disable_patch_button)
+        patch_buttons_layout.addWidget(self.delete_patch_button)
+        patch_buttons_layout.addStretch()
+
+        local_patches_layout.addLayout(patch_buttons_layout)
+
+        self.left_splitter.addWidget(self.local_patches_widget)
+
+        # === 右侧：搜索结果列表 ===
+        self.search_results_widget = QWidget()
+        search_results_layout = QVBoxLayout()
+        self.search_results_widget.setLayout(search_results_layout)
 
         # 结果列表标签
         results_label = QLabel("搜索结果:")
-        left_layout.addWidget(results_label)
+        search_results_layout.addWidget(results_label)
 
         # 结果列表
         self.results_list = QListWidget()
-        left_layout.addWidget(self.results_list)
+        search_results_layout.addWidget(self.results_list)
 
-        self.splitter.addWidget(self.left_widget)
+        self.left_splitter.addWidget(self.search_results_widget)
 
-        # 右侧：分为上下两部分（上方搜索栏，下方编辑器）
+        # 设置左侧分割器的初始比例（本地补丁管理:搜索结果 = 4:6）
+        self.left_splitter.setSizes([300, 500])
+
+        self.splitter.addWidget(self.left_container)
+
+        # ===== 右侧：编辑器区域 =====
         self.right_widget = QWidget()
         right_layout = QVBoxLayout()
         self.right_widget.setLayout(right_layout)
@@ -344,16 +393,14 @@ class MainWindow(QMainWindow):
         self.setup_editor_search_bar()
         right_layout.addWidget(self.editor_search_widget)
 
-        # 编辑器按钮
+        # 编辑器按钮（删除补丁按钮已移除）
         button_layout = QHBoxLayout()
         self.load_button = QPushButton("重新加载数据")
         self.save_button = QPushButton("快速保存")
-        self.delete_patch_button = QPushButton("删除补丁")
         self.clear_editor_button = QPushButton("清空编辑器")
 
         button_layout.addWidget(self.load_button)
         button_layout.addWidget(self.save_button)
-        button_layout.addWidget(self.delete_patch_button)
         button_layout.addWidget(self.clear_editor_button)
         button_layout.addStretch()
 
@@ -361,7 +408,7 @@ class MainWindow(QMainWindow):
 
         self.splitter.addWidget(self.right_widget)
 
-        # 设置初始分割比例（左侧:右侧 = 4:6）
+        # 设置最外层分割器的初始分割比例（左侧:右侧 = 4:6）
         self.splitter.setSizes([400, 600])
 
     def setup_statusbar(self):
@@ -432,12 +479,18 @@ class MainWindow(QMainWindow):
 
         # 列表选择
         self.results_list.itemSelectionChanged.connect(self._on_item_selected)
+        self.local_patches_list.itemSelectionChanged.connect(self._on_local_patch_selected)
 
         # 编辑器按钮
         self.load_button.clicked.connect(self._on_load_clicked)
         self.save_button.clicked.connect(self._on_quick_save_clicked)
-        self.delete_patch_button.clicked.connect(self._on_delete_patch_clicked)
         self.clear_editor_button.clicked.connect(self._on_clear_editor_clicked)
+
+        # 本地补丁管理按钮
+        self.refresh_patches_button.clicked.connect(self._on_refresh_patches_clicked)
+        self.enable_patch_button.clicked.connect(self._on_enable_patch_clicked)
+        self.disable_patch_button.clicked.connect(self._on_disable_patch_clicked)
+        self.delete_patch_button.clicked.connect(self._on_delete_patch_clicked)
 
         # 工具栏按钮
         self.open_action.triggered.connect(self._on_open_clicked)
@@ -456,7 +509,7 @@ class MainWindow(QMainWindow):
         if self.settings.get("window.maximized"):
             self.showMaximized()
         else:
-            width = self.settings.get("window.width", 1200)
+            width = self.settings.get("window.width", 1500)
             height = self.settings.get("window.height", 800)
             self.resize(width, height)
 
@@ -1274,6 +1327,341 @@ class MainWindow(QMainWindow):
         cursor.setCharFormat(default_format)
         # 将默认格式设置为编辑器的当前字符格式
         self.text_editor.setCurrentCharFormat(default_format)
+
+    # ===== 本地补丁管理方法 =====
+
+    def refresh_local_patches_list(self):
+        """刷新本地补丁列表"""
+        # 获取补丁目录路径
+        save_path_str = self.settings.get("editor.save_path", "../Metadata Patches")
+        save_path = Path(save_path_str)
+
+        # 判断是否为绝对路径
+        if not save_path.is_absolute():
+            # 相对路径：相对于项目根目录
+            base_dir = Path(__file__).parent.parent.parent
+            save_path = (base_dir / save_path_str).resolve()
+
+        # 清空列表
+        self.local_patches_list.clear()
+
+        # 检查目录是否存在
+        if not save_path.exists():
+            self.logger.warning(f"补丁目录不存在: {save_path}")
+            self.local_patches_list.addItem(f"目录不存在: {save_path}")
+            return
+
+        # 扫描txt和txt.bk文件
+        txt_files = list(save_path.glob("*.txt"))
+        bk_files = list(save_path.glob("*.txt.bk"))
+
+        all_files = []
+        for file in txt_files:
+            all_files.append((file, True))  # True表示激活状态
+        for file in bk_files:
+            all_files.append((file, False))  # False表示未激活状态
+
+        # 按文件名排序
+        all_files.sort(key=lambda x: x[0].name.lower())
+
+        # 添加到列表
+        for file, is_active in all_files:
+            if is_active:
+                display_name = file.name
+                icon_text = "[激活] "
+            else:
+                display_name = file.name
+                icon_text = "[未激活] "
+
+            item_text = f"{icon_text}{display_name}"
+            item = QListWidgetItem(item_text)
+            item.setData(Qt.UserRole, file)  # 存储完整路径
+            item.setData(Qt.UserRole + 1, is_active)  # 存储激活状态
+            self.local_patches_list.addItem(item)
+
+        self.logger.info(f"本地补丁列表已刷新，找到 {len(all_files)} 个文件")
+        self.status_label.setText(f"本地补丁列表已刷新 ({len(all_files)} 个文件)")
+
+    def _on_local_patch_selected(self):
+        """本地补丁列表项选择事件"""
+        selected_items = self.local_patches_list.selectedItems()
+        if not selected_items:
+            return
+
+        selected_item = selected_items[0]
+        file_path = selected_item.data(Qt.UserRole)
+        is_active = selected_item.data(Qt.UserRole + 1)
+
+        if file_path and file_path.exists():
+            # 加载文件内容到编辑器
+            self._load_patch_file(file_path)
+
+            # 更新状态显示
+            status_text = f"已选择补丁文件: {file_path.name}"
+            if not is_active:
+                status_text += " (未激活)"
+            self.status_label.setText(status_text)
+        else:
+            self.status_label.setText("选择的文件不存在")
+
+    def _load_patch_file(self, file_path: Path):
+        """加载补丁文件到编辑器"""
+        try:
+            with open(file_path, 'r', encoding='utf-8') as f:
+                content = f.read()
+
+            # 清除之前的搜索高亮
+            self._clear_editor_search_highlights()
+            # 重置编辑器当前字符格式
+            self._reset_editor_char_format()
+            # 设置编辑器内容
+            self.text_editor.setPlainText(content)
+            # 记录当前文件路径
+            self.current_file_path = file_path
+            self.logger.info(f"补丁文件已加载: {file_path}")
+
+        except Exception as e:
+            self.logger.error(f"加载补丁文件失败: {e}")
+            QMessageBox.critical(self, "错误", f"加载补丁文件失败:\n{str(e)}")
+
+    def _on_refresh_patches_clicked(self):
+        """刷新列表按钮点击事件"""
+        self.refresh_local_patches_list()
+
+    def _on_enable_patch_clicked(self):
+        """启用补丁按钮点击事件"""
+        selected_items = self.local_patches_list.selectedItems()
+        if not selected_items:
+            QMessageBox.warning(self, "警告", "请先选择一个补丁文件")
+            return
+
+        selected_item = selected_items[0]
+        file_path = selected_item.data(Qt.UserRole)
+        is_active = selected_item.data(Qt.UserRole + 1)
+
+        if not file_path or not file_path.exists():
+            QMessageBox.warning(self, "警告", "选择的文件不存在")
+            return
+
+        # 如果已经是激活状态（txt文件），则无需操作
+        if is_active:
+            QMessageBox.information(self, "信息", "补丁已处于激活状态")
+            return
+
+        # 检查是否为txt.bk文件
+        if not file_path.name.endswith('.txt.bk'):
+            QMessageBox.warning(self, "警告", "只有未激活的补丁文件(.txt.bk)才能被激活")
+            return
+
+        # 确认操作
+        reply = QMessageBox.question(
+            self,
+            "确认启用",
+            f"确定要启用补丁 '{file_path.name}' 吗？",
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.No
+        )
+
+        if reply != QMessageBox.Yes:
+            return
+
+        # 重命名文件：去掉.bk扩展名
+        new_path = file_path.with_suffix('')  # 移除.bk
+
+        # 检查目标文件是否已存在
+        if new_path.exists():
+            reply = QMessageBox.question(
+                self,
+                "文件已存在",
+                f"文件 '{new_path.name}' 已存在，是否覆盖？",
+                QMessageBox.Yes | QMessageBox.No,
+                QMessageBox.No
+            )
+            if reply != QMessageBox.Yes:
+                return
+
+        try:
+            file_path.rename(new_path)
+            self.logger.info(f"补丁已启用: {file_path.name} -> {new_path.name}")
+            self.status_label.setText(f"补丁已启用: {file_path.name}")
+
+            # 如果当前编辑器打开的是这个文件，更新current_file_path
+            if self.current_file_path == file_path:
+                self.current_file_path = new_path
+
+            # 刷新列表
+            self.refresh_local_patches_list()
+
+        except Exception as e:
+            self.logger.error(f"启用补丁失败: {e}")
+            QMessageBox.critical(self, "错误", f"启用补丁失败:\n{str(e)}")
+
+    def _on_disable_patch_clicked(self):
+        """禁用补丁按钮点击事件"""
+        selected_items = self.local_patches_list.selectedItems()
+        if not selected_items:
+            QMessageBox.warning(self, "警告", "请先选择一个补丁文件")
+            return
+
+        selected_item = selected_items[0]
+        file_path = selected_item.data(Qt.UserRole)
+        is_active = selected_item.data(Qt.UserRole + 1)
+
+        if not file_path or not file_path.exists():
+            QMessageBox.warning(self, "警告", "选择的文件不存在")
+            return
+
+        # 如果已经是未激活状态（txt.bk文件），则无需操作
+        if not is_active:
+            QMessageBox.information(self, "信息", "补丁已处于未激活状态")
+            return
+
+        # 检查是否为txt文件
+        if not file_path.name.endswith('.txt'):
+            QMessageBox.warning(self, "警告", "只有激活的补丁文件(.txt)才能被禁用")
+            return
+
+        # 确认操作
+        reply = QMessageBox.question(
+            self,
+            "确认禁用",
+            f"确定要禁用补丁 '{file_path.name}' 吗？",
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.No
+        )
+
+        if reply != QMessageBox.Yes:
+            return
+
+        # 重命名文件：添加.bk扩展名
+        new_path = file_path.with_suffix('.txt.bk')
+
+        # 检查目标文件是否已存在
+        if new_path.exists():
+            reply = QMessageBox.question(
+                self,
+                "文件已存在",
+                f"文件 '{new_path.name}' 已存在，是否覆盖？",
+                QMessageBox.Yes | QMessageBox.No,
+                QMessageBox.No
+            )
+            if reply != QMessageBox.Yes:
+                return
+
+        try:
+            file_path.rename(new_path)
+            self.logger.info(f"补丁已禁用: {file_path.name} -> {new_path.name}")
+            self.status_label.setText(f"补丁已禁用: {file_path.name}")
+
+            # 如果当前编辑器打开的是这个文件，更新current_file_path
+            if self.current_file_path == file_path:
+                self.current_file_path = new_path
+
+            # 刷新列表
+            self.refresh_local_patches_list()
+
+        except Exception as e:
+            self.logger.error(f"禁用补丁失败: {e}")
+            QMessageBox.critical(self, "错误", f"禁用补丁失败:\n{str(e)}")
+
+    def _on_delete_patch_clicked(self):
+        """删除补丁按钮点击事件（已移动到本地补丁管理区域）"""
+        # 检查当前是否有选中的本地补丁
+        selected_items = self.local_patches_list.selectedItems()
+        if selected_items:
+            # 如果本地补丁列表有选中项，删除选中的补丁文件
+            selected_item = selected_items[0]
+            file_path = selected_item.data(Qt.UserRole)
+
+            if not file_path or not file_path.exists():
+                QMessageBox.warning(self, "警告", "选择的文件不存在")
+                return
+
+            # 确认删除
+            reply = QMessageBox.question(
+                self,
+                "确认删除",
+                f"确定要删除补丁文件 '{file_path.name}' 吗？\n\n此操作不可撤销。",
+                QMessageBox.Yes | QMessageBox.No,
+                QMessageBox.No
+            )
+
+            if reply != QMessageBox.Yes:
+                return
+
+            # 执行删除
+            try:
+                file_path.unlink()
+                self.logger.info(f"补丁文件已删除: {file_path}")
+                self.status_label.setText(f"补丁文件已删除: {file_path.name}")
+
+                # 刷新列表
+                self.refresh_local_patches_list()
+
+                # 如果删除的文件是当前编辑器打开的文件，清除当前文件路径
+                if self.current_file_path == file_path:
+                    self.current_file_path = None
+
+            except Exception as e:
+                self.logger.error(f"删除补丁文件失败: {e}")
+                QMessageBox.critical(
+                    self,
+                    "删除失败",
+                    f"删除补丁文件失败:\n{str(e)}"
+                )
+        else:
+            # 如果没有在本地补丁列表中选择，则使用原来的逻辑（删除当前编辑器中的文件）
+            # 检查当前内容是否来自本地文件
+            if self.current_file_path is None:
+                QMessageBox.information(
+                    self,
+                    "无法删除",
+                    "当前内容非本地文件，无法删除。\n\n内容可能是从API生成或尚未保存到本地。"
+                )
+                return
+
+            # 检查文件是否存在
+            if not self.current_file_path.exists():
+                QMessageBox.warning(
+                    self,
+                    "文件不存在",
+                    f"文件 '{self.current_file_path.name}' 不存在，可能已被删除或移动。"
+                )
+                # 清除无效的文件路径记录
+                self.current_file_path = None
+                return
+
+            # 确认删除
+            reply = QMessageBox.question(
+                self,
+                "确认删除",
+                f"确定要删除文件 '{self.current_file_path.name}' 吗？\n\n此操作不可撤销。",
+                QMessageBox.Yes | QMessageBox.No,
+                QMessageBox.No
+            )
+
+            if reply != QMessageBox.Yes:
+                return
+
+            # 执行删除
+            try:
+                file_path = self.current_file_path  # 保存引用
+                file_path.unlink()  # 删除文件
+                self.logger.info(f"文件已删除: {file_path}")
+                self.status_label.setText(f"文件已删除: {file_path}")
+
+                # 清除文件路径记录（文件已不存在）
+                self.current_file_path = None
+
+                # 可选：不清除编辑器内容，用户可以继续编辑并另存为新文件
+
+            except Exception as e:
+                self.logger.error(f"删除文件失败: {e}")
+                QMessageBox.critical(
+                    self,
+                    "删除失败",
+                    f"删除文件失败:\n{str(e)}"
+                )
 
 
 if __name__ == "__main__":

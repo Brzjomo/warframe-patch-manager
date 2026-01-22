@@ -49,7 +49,7 @@ class Settings:
                 "save_path": "../Metadata Patches"
             },
             "window": {
-                "width": 1200,
+                "width": 1500,
                 "height": 800,
                 "maximized": False,
                 "pos_x": None,

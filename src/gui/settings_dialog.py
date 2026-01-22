@@ -243,7 +243,7 @@ class SettingsDialog(QDialog):
 
             # 窗口设置
             self.window_width_spin.setValue(
-                self.settings.get("window.width", 1200)
+                self.settings.get("window.width", 1500)
             )
             self.window_height_spin.setValue(
                 self.settings.get("window.height", 800)
