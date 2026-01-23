@@ -254,6 +254,11 @@ class WFItemsLoader:
         query_lower = query.lower()
         results = []
 
+        # 检查查询是否只包含ASCII字符（可能是英文查询）
+        # 如果查询包含非ASCII字符（如中文），则用户可能在搜索目标语言
+        # 如果查询只包含ASCII字符，用户可能想搜索英文名称，即使搜索语言不是英文
+        is_ascii_query = all(ord(c) < 128 for c in query)
+
         # 根据语言选择搜索策略
         if language == "en":
             # 在英文名称中搜索
@@ -263,18 +268,55 @@ class WFItemsLoader:
                     if len(results) >= limit:
                         break
         else:
-            # 在其他语言名称中搜索
+            # 对于非英文语言，需要同时搜索目标语言和英文
+            target_language_results = []
+            english_results = []
+
+            # 收集目标语言的结果
             for internal_name, lang_data_dict in self.i18n_data.items():
                 if language in lang_data_dict:
                     lang_data = lang_data_dict[language]
                     if "name" in lang_data and query_lower in lang_data["name"].lower():
-                        # 获取显示名称（优先使用搜索语言的名称）
                         display_name = lang_data["name"]
+                        target_language_results.append((internal_name, display_name))
+
+            # 收集英文结果（包括没有目标语言翻译的物品）
+            for internal_name, english_name in self.english_names.items():
+                # 检查是否已经在目标语言结果中
+                if any(internal_name == r[0] for r in target_language_results):
+                    continue
+
+                if query_lower in english_name.lower():
+                    english_results.append((internal_name, english_name))
+
+            # 合并结果的策略：
+            # 1. 如果查询是纯ASCII（可能是英文），优先显示英文结果
+            # 2. 否则，优先显示目标语言结果
+            if is_ascii_query:
+                # 对于英文查询，优先显示英文结果
+                # 首先添加英文结果（包括没有翻译的物品）
+                results = english_results[:limit]
+
+                # 如果还有空间，添加目标语言结果
+                if len(results) < limit:
+                    remaining_slots = limit - len(results)
+                    # 确保不重复
+                    for internal_name, display_name in target_language_results:
+                        if any(internal_name == r[0] for r in results):
+                            continue
                         results.append((internal_name, display_name))
                         if len(results) >= limit:
                             break
+            else:
+                # 对于非ASCII查询（如中文），优先显示目标语言结果
+                results = target_language_results[:limit]
 
-        logger.debug(f"按语言 '{language}' 搜索 '{query}' 找到 {len(results)} 个结果")
+                # 如果还有空间，添加英文结果
+                if len(results) < limit:
+                    remaining_slots = limit - len(results)
+                    results.extend(english_results[:remaining_slots])
+
+        logger.debug(f"按语言 '{language}' 搜索 '{query}' 找到 {len(results)} 个结果 (ASCII查询: {is_ascii_query})")
         return results
 
     def search_all_languages(self, query: str, limit: int = 50) -> List[Tuple[str, str, str]]:

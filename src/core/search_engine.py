@@ -186,12 +186,9 @@ class SearchEngine:
             except Exception as e:
                 logger.warning(f"多语言搜索失败，降级到基础搜索: {e}")
 
-        # 降级方案：如果语言是英文或加载失败，使用基础搜索
-        if language == "en":
-            return self.search(query, limit)
-        else:
-            # 对于非英文语言，如果没有多语言数据，返回空结果
-            return []
+        # 降级方案：如果多语言搜索没有结果或失败，使用基础搜索
+        # 这样即使物品没有目标语言的翻译，也能通过英文名称被搜索到
+        return self.search(query, limit)
 
     def get_supported_languages(self) -> Set[str]:
         """

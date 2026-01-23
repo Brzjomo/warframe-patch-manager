@@ -1177,7 +1177,7 @@ class MainWindow(QMainWindow):
         """显示关于对话框"""
         about_text = """
         <h3>WarframePatchManager</h3>
-        <p>版本: 1.0.0</p>
+        <p>版本: 1.0.1</p>
         <p>一个用于快速生成和管理OpenWF游戏补丁的辅助工具。</p>
         <p>功能:</p>
         <ul>
